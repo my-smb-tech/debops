@@ -1,6 +1,6 @@
 ---
-# Copyright (C) 2017-2019 Maciej Delmanowski <drybjed@gmail.com>
-# Copyright (C) 2017-2019 DebOps <https://debops.org/>
+# Copyright (C) 2017-2023 Maciej Delmanowski <drybjed@gmail.com>
+# Copyright (C) 2017-2023 DebOps <https://debops.org/>
 # SPDX-License-Identifier: GPL-3.0-only
 
 # The tasks below are a fix for an issue where Avahi service cannot start in an
@@ -12,6 +12,26 @@
   ansible.builtin.import_role:
     name: 'global_handlers'
 
+- name: Create systemd-resolved configuration directory
+  ansible.builtin.file:
+    path: '/etc/systemd/resolved.conf.d'
+    state: 'directory'
+    mode: '0755'
+  when: (ansible_service_mgr == 'systemd' and
+         (ansible_local.resolved.installed | d()) | bool)
+
+- name: Disable MulticastDNS support in systemd-resolved
+  ansible.builtin.template:
+    src: 'etc/systemd/resolved.conf.d/avahi-mdns.conf.j2'
+    dest: '/etc/systemd/resolved.conf.d/avahi-mdns.conf'
+    mode: '0644'
+  notify: [ 'Restart systemd-resolved service' ]
+  when: (ansible_service_mgr == 'systemd' and
+         (ansible_local.resolved.installed | d()) | bool)
+
+- name: Flush handlers when needed
+  ansible.builtin.meta: 'flush_handlers'
+
 - name: Make sure that Avahi config directory exists
   ansible.builtin.file:
     path: '/etc/avahi'
@@ -21,7 +41,7 @@
     mode: '0755'
 
 - name: Divert the avahi-daemon configuration
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '/etc/avahi/{{ item }}'
   loop:
     - 'avahi-daemon.conf'
@@ -55,7 +75,7 @@
     group: 'root'
     mode: '0755'
   when: ansible_service_mgr == 'systemd' and
-        ansible_virtualization_type in [ 'lxc', 'docker' ] and
+        ansible_virtualization_type in ['lxc', 'docker'] and
         ansible_virtualization_role == 'guest'
 
 - name: Install avahi-daemon exec override on LXC guests
@@ -66,7 +86,7 @@
     group: 'root'
     mode: '0644'
   when: ansible_service_mgr == 'systemd' and
-        ansible_virtualization_type in [ 'lxc', 'docker' ] and
+        ansible_virtualization_type in ['lxc', 'docker'] and
         ansible_virtualization_role == 'guest'
 
 # The rest of the role continues as normal.
@@ -89,7 +109,7 @@
     state: 'present'
     mode: '0644'
   with_dict: '{{ avahi__hosts | combine(avahi__group_hosts) | combine(avahi__host_hosts) }}'
-  when: item.key | d() and item.value | d()
+  when: item.key is defined and item.key is truthy and item.value is defined and item.value is truthy
 
 - name: Configure Avahi CNAME aliases
   ansible.builtin.include_tasks: avahi_alias.yml
@@ -113,7 +133,8 @@
     mode: '0644'
   with_dict: '{{ avahi__combined_services }}'
   when: (item.value.filename | d(item.key) and item.value.state | d('present') != 'absent' and
-         (item.value.services | d() or item.value.type | d()))
+         ((item.value.services is defined and item.value.services is truthy) or
+          (item.value.type is defined and item.value.type is truthy)))
   tags: [ 'role::avahi:alias', 'role::avahi:services' ]
 
 - name: Ensure that the avahi-daemon service in in the desired state

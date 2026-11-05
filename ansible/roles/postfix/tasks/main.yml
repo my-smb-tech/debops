@@ -19,6 +19,8 @@
   ansible.builtin.apt:
     name: '{{ (postfix__base_packages
              + postfix__dependent_packages
+             + postfix__host_packages
+             + postfix__group_packages
              + postfix__packages)
              | flatten }}'
     state: 'present'
@@ -33,7 +35,7 @@
     name: '{{ postfix__purge_packages | flatten }}'
     state: 'absent'
     purge: True
-  when: postfix__purge_packages | d() and ansible_pkg_mgr == 'apt'
+  when: postfix__purge_packages is defined and postfix__purge_packages is truthy and ansible_pkg_mgr == 'apt'
   tags: [ 'meta::provision' ]
 
 - name: Disable Postfix configuration in debconf
@@ -104,9 +106,8 @@
   ansible.builtin.file:
     path: '/etc/postfix/{{ item.name }}'
     state: 'absent'
-  with_flattened:
-    - '{{ postfix__combined_lookup_tables | debops.debops.parse_kv_items }}'
-  when: item.name | d() and item.state | d('present') == 'absent'
+  loop: '{{ postfix__combined_lookup_tables | debops.debops.parse_kv_items }}'
+  when: item.name is defined and item.name is truthy and item.state | d('present') == 'absent'
   notify: [ 'Process Postfix Makefile', 'Check postfix and reload' ]
   no_log: '{{ debops__no_log | d(item.no_log)
               | d(True if (item.mode | d("0644") == "0600") else False) }}'
@@ -117,13 +118,12 @@
     dest:  '/etc/postfix/{{ item.name }}'
     owner: '{{ item.owner | d("root") }}'
     group: '{{ item.group | d("postfix") }}'
-    mode:  '{{ item.mode  | d("0640") }}'
-  with_flattened:
-    - '{{ postfix__combined_lookup_tables | debops.debops.parse_kv_items }}'
+    mode:  '{{ item.mode | d("0640") }}'
+  loop: '{{ postfix__combined_lookup_tables | debops.debops.parse_kv_items }}'
   notify: [ 'Process Postfix Makefile', 'Check postfix and reload' ]
-  when: item.name | d() and item.state | d('present') != 'absent'
+  when: item.name is defined and item.name is truthy and item.state | d('present') != 'absent'
   no_log: '{{ debops__no_log | d(item.no_log)
-              | d(True if (item.mode | d("0640") in ["0640","0600"])
+              | d(True if (item.mode | d("0640") in ["0640", "0600"])
                   else False) }}'
 
 - name: Save dependent configuration on Ansible Controller

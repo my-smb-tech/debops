@@ -121,9 +121,9 @@ pki_vcs_ignore_patterns_host: []
 # Enable or disable support for ACME certificates.
 pki_acme: '{{ (True
                if (((ansible_all_ipv4_addresses | d([]) +
-                    ansible_all_ipv6_addresses | d([])) | ipaddr("public") and
-                    pki_default_domain)
-                  or pki_acme_type != "acme-tiny" )
+                     ansible_all_ipv6_addresses | d([])) | ansible.utils.ipaddr("public")
+                    and pki_default_domain)
+                   or pki_acme_type != "acme-tiny")
                else False) | bool }}'
 
                                                                    # ]]]
@@ -186,7 +186,7 @@ pki_acme_tiny_repo: 'https://github.com/diafygi/acme-tiny'
 # .. envvar:: pki_acme_tiny_version [[[
 #
 # Branch or version of the :program:`acme-tiny` source which should be used.
-pki_acme_tiny_version: 'master'
+pki_acme_tiny_version: 'main'
 
                                                                    # ]]]
 # .. envvar:: pki_acme_tiny_src [[[
@@ -259,6 +259,12 @@ pki_create_acme_challenge_dir: '{{ True if (ansible_local.nginx.acme | d() and
 # The default contents of the Certbot configuration file defined by the role.
 pki_certbot_default_configuration:
 
+  - name: 'key-type'
+    comment: |
+      Define the default key signature algorithm to use for certificates.
+      DebOps currently supports only RSA signature algorithm.
+    value: 'rsa'
+
   - name: 'max-log-backups'
     comment: |
       Because we are using logrotate for greater flexibility, disable the
@@ -305,7 +311,7 @@ pki_acme_packages:
   - '{{ "curl" if (pki_acme_type == "acme-tiny" and pki_acme_install | bool) else [] }}'
   - '{{ "git" if (pki_acme_type == "acme-tiny" and pki_acme_install | bool) else [] }}'
   - '{{ [] if (pki_acme_install | bool == false or ansible_distribution_release in
-               [ "stretch", "trusty", "xenial", "bionic" ])
+               ["stretch", "trusty", "xenial", "bionic"])
            else "acme-tiny" if (pki_acme_type == "acme-tiny") else [] }}'
   - '{{ "python3-certbot-dns-cloudflare" if (pki_acme_type == "dns-cloudflare" and pki_acme_install | bool) else [] }}'
   - '{{ "python3-certbot-dns-digitalocean" if (pki_acme_type == "dns-digitalocean" and pki_acme_install | bool) else [] }}'
@@ -319,10 +325,10 @@ pki_acme_packages:
   - '{{ "python3-certbot-dns-sakuracloud" if (pki_acme_type == "dns-sakuracloud" and pki_acme_install | bool) else [] }}'
   - '{{ "python3-certbot-dns-gandi" if (pki_acme_type == "dns-gandi" and pki_acme_install | bool) else [] }}'
   - '{{ "certbot" if (pki_acme_type in
-                [ "dns-cloudflare", "dns-digitalocean",
-                  "dns-dnsimple", "dns-gehirn", "dns-google",
-                  "dns-linode", "dns-ovh", "dns-rfc2136",
-                  "dns-route53", "dns-sakuracloud", "dns-gandi", "manual" ]
+                ["dns-cloudflare", "dns-digitalocean",
+                 "dns-dnsimple", "dns-gehirn", "dns-google",
+                 "dns-linode", "dns-ovh", "dns-rfc2136",
+                 "dns-route53", "dns-sakuracloud", "dns-gandi", "manual"]
            and pki_acme_install | bool) else [] }}'
 
                                                                    # ]]]

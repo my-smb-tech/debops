@@ -12,6 +12,10 @@
   ansible.builtin.import_role:
     name: 'global_handlers'
 
+- name: Import DebOps secret role
+  ansible.builtin.import_role:
+    name: 'secret'
+
 - name: Pre hooks
   ansible.builtin.include_tasks: '{{ lookup("debops.debops.task_src", "apt_install/pre_main.yml") }}'
 
@@ -58,17 +62,14 @@
     value:     '{{ item.value | d(omit) }}'
     answer:    '{{ item.answer | d(omit) }}'
     vtype:     '{{ item.vtype | d(omit) }}'
-  with_flattened:
-    - '{{ apt_install__debconf }}'
-    - '{{ apt_install__group_debconf }}'
-    - '{{ apt_install__host_debconf }}'
-  when: item.name | d()
+  loop: '{{ q("flattened", apt_install__debconf
+                           + apt_install__group_debconf
+                           + apt_install__host_debconf) }}'
+  when: item.name is defined and item.name is truthy
 
 - name: Install requested APT packages
   ansible.builtin.apt:
-    name: '{{ q("flattened", lookup("template",
-                             "lookup/apt_install__all_packages.j2",
-                             convert_data=False) | from_json) }}'
+    name: '{{ lookup("template", "lookup/apt_install__all_packages.j2") | from_yaml }}'
     state: '{{ apt_install__state }}'
     install_recommends: '{{ apt_install__recommends | bool }}'
     update_cache: '{{ apt_install__update_cache | bool }}'
@@ -78,27 +79,27 @@
   when: apt_install__enabled | bool
 
 - name: Configure alternative symlinks
-  alternatives:
+  community.general.alternatives:
     name:     '{{ item.name }}'
     path:     '{{ item.path }}'
     link:     '{{ item.link | d(omit) }}'
     priority: '{{ item.priority | d(omit) }}'
-  with_flattened:
-    - '{{ apt_install__default_alternatives }}'
-    - '{{ apt_install__alternatives }}'
-    - '{{ apt_install__group_alternatives }}'
-    - '{{ apt_install__host_alternatives }}'
-  when: item.name | d() and item.path | d()
+  loop: '{{ q("flattened", apt_install__default_alternatives
+                           + apt_install__alternatives
+                           + apt_install__group_alternatives
+                           + apt_install__host_alternatives) }}'
+  when: item.name is defined and item.name is truthy and
+        item.path is defined and item.path is truthy
 
 - name: Configure automatic alternatives
   ansible.builtin.command: update-alternatives --auto {{ item.name }}
   register: apt_install__register_alternatives
-  with_flattened:
-    - '{{ apt_install__alternatives }}'
-    - '{{ apt_install__group_alternatives }}'
-    - '{{ apt_install__host_alternatives }}'
-  when: item.name | d() and not item.path | d()
-  changed_when: apt_install__register_alternatives.stdout | d()
+  loop: '{{ q("flattened", apt_install__alternatives
+                           + apt_install__group_alternatives
+                           + apt_install__host_alternatives) }}'
+  when: item.name is defined and item.name is truthy and
+        not (item.path is defined and item.path is truthy)
+  changed_when: apt_install__register_alternatives.stdout is truthy
 
 - name: Disable kernel hints about pending upgrades
   ansible.builtin.template:

@@ -16,16 +16,14 @@
     name: 'secret'
 
 - name: Pre hooks
-  include_tasks: '{{ lookup("debops.debops.task_src", "roundcube/pre_main.yml") }}'
+  ansible.builtin.include_tasks: '{{ lookup("debops.debops.task_src", "roundcube/pre_main.yml") }}'
 
 
 # ---- Environment ----
 
-- name: Get version of current Roundcube installation
+- name: Get version of current Roundcube installation  # noqa command-instead-of-module
   ansible.builtin.command: sed -n "s/^define('RCMAIL_VERSION', '\(.*\)');/\1/p" \
            {{ roundcube__git_dest }}/program/include/iniset.php
-  args:
-    warn: False
   changed_when: False
   failed_when: False
   register: roundcube__register_version
@@ -43,7 +41,8 @@
   until: roundcube__register_packages is succeeded
   tags: [ 'role::roundcube:pkg' ]
 
-- include_tasks: deploy_roundcube.yml
+- name: Deploy Roundcube
+  ansible.builtin.include_tasks: deploy_roundcube.yml
   tags: [ 'role::roundcube:deployment' ]
 
 - name: Make sure that Ansible local facts directory exists
@@ -64,7 +63,9 @@
   ansible.builtin.meta: 'flush_handlers'
 
 # ---- Skins/Themes ----
-- include_tasks: configure_skins.yml
+
+- name: Configure skins
+  ansible.builtin.include_tasks: configure_skins.yml
   tags: [ 'role::roundcube:skins', 'role::roundcube:themes' ]
 
 # ---- Configuration ----
@@ -79,11 +80,13 @@
   when: roundcube__database_map[roundcube__database].dbtype == 'sqlite'
   tags: [ 'role::roundcube:database' ]
 
-- include_tasks: configure_mysql.yml
+- name: Configure MySQL/MariaDB support
+  ansible.builtin.include_tasks: configure_mysql.yml
   when: roundcube__database_map[roundcube__database].dbtype == 'mysql'
   tags: [ 'role::roundcube:database' ]
 
-- include_tasks: configure_postgresql.yml
+- name: Configure PostgreSQL support
+  ansible.builtin.include_tasks: configure_postgresql.yml
   when: roundcube__database_map[roundcube__database].dbtype == 'postgresql'
   tags: [ 'role::roundcube:database' ]
 
@@ -97,7 +100,7 @@
   tags: [ 'role::roundcube:config' ]
 
 - name: Generate Roundcube plugin configuration
-  ansible.builtin.template:
+  ansible.builtin.template:  # noqa jinja[spacing]
     src: 'srv/www/sites/roundcube/public/plugins/config.inc.php.j2'
     dest: '{{ roundcube__git_dest + "/plugins/" + item.name + "/config.inc.php" }}'
     owner: 'root'
@@ -117,10 +120,10 @@
   become: True
   become_user: '{{ roundcube__user }}'
   register: roundcube__register_updatedb
-  changed_when: roundcube__register_updatedb.stdout | d()
-  when: (roundcube__register_version.stdout | d() and
+  changed_when: roundcube__register_updatedb.stdout is defined and roundcube__register_updatedb.stdout is truthy
+  when: (roundcube__register_version.stdout is defined and roundcube__register_version.stdout is truthy and
          (ansible_local.roundcube.version | d("0.0.0")) is version_compare(roundcube__register_version.stdout, '>'))
   tags: [ 'role::roundcube:database' ]
 
 - name: Post hooks
-  include_tasks: '{{ lookup("debops.debops.task_src", "roundcube/post_main.yml") }}'
+  ansible.builtin.include_tasks: '{{ lookup("debops.debops.task_src", "roundcube/post_main.yml") }}'

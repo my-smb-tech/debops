@@ -16,15 +16,14 @@
   until: locales__register_packages is succeeded
 
 - name: Ensure that specified locales exist
-  locale_gen:
+  community.general.locale_gen:
     name: '{{ item.name | d(item) }}'
     state: '{{ item.state | d("present") }}'
-  with_flattened:
-    - '{{ locales__default_list }}'
-    - '{{ locales__list }}'
-    - '{{ locales__group_list }}'
-    - '{{ locales__host_list }}'
-    - '{{ locales__dependent_list }}'
+  loop: '{{ q("flattened", locales__default_list
+                           + locales__list
+                           + locales__group_list
+                           + locales__host_list
+                           + locales__dependent_list) }}'
 
 - name: Set default system locale
   ansible.builtin.debconf:
@@ -33,10 +32,12 @@
     vtype: 'string'
     value: '{{ locales__system_lang }}'
   register: locales__register_system_lang
-  when: ansible_pkg_mgr == 'apt' and locales__system_lang | d()
+  when: ansible_pkg_mgr == 'apt' and locales__system_lang is truthy
 
 - name: Update /etc/default/locale
   ansible.builtin.command: 'update-locale LANG={{ locales__system_lang }}'  # noqa no-handler
+  register: locales__register_update_locale
+  changed_when: locales__register_update_locale.changed | bool
   when: ansible_pkg_mgr == 'apt' and locales__register_system_lang is changed
 
 - name: Make sure that Ansible local facts directory exists

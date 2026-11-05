@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 # Copyright (C) 2014-2019 Hartmut Goebel <h.goebel@crazy-compilers.com>
 # Copyright (C) 2014-2020 Maciej Delmanowski <drybjed@gmail.com>
@@ -8,13 +7,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 # Installation in development mode:
-#   pip3 install --user --editable .
+#   pipx install --editable .
 
 from setuptools import setup, find_packages
 import subprocess
 import glob
 import os
 import re
+import sys
 
 
 def find_files(directory, strip):
@@ -37,13 +37,7 @@ def find_files(directory, strip):
     return result
 
 
-try:
-    import pypandoc
-    README = pypandoc.convert_file('README.md', 'rst')
-except(IOError, ImportError):
-    print('Warning: The "pandoc" support is required to convert '
-          'the README.md to reStructuredText format')
-    README = open('README.md').read()
+README = open('README.md').read()
 
 try:
     unicode
@@ -60,9 +54,14 @@ except NameError:
 # Python package
 try:
     with open(os.devnull, 'w') as devnull:
-        RELEASE = subprocess.check_output(
-                ['git', 'describe'], stderr=devnull
-                ).strip().lstrip(b'v').decode('utf-8')
+        GIT_RELEASE = subprocess.check_output(
+                      ['git', 'describe'], stderr=devnull
+                      ).strip().lstrip(b'v').decode('utf-8').split('-')
+        if len(GIT_RELEASE) > 1:
+            RELEASE = (GIT_RELEASE[0] + '.dev' + GIT_RELEASE[1]
+                       + '+' + GIT_RELEASE[2])
+        else:
+            RELEASE = GIT_RELEASE[0]
 except subprocess.CalledProcessError:
     try:
         RELEASE = open('VERSION').read().strip()
@@ -82,6 +81,14 @@ with open('src/debops/__version__.py', 'w') as version_file:
     version_file.write('__version__ = "{}"\n'
                        .format(RELEASE))
 
+# Stamp the rest of the generated version files (the bundled collection
+# manifest, which carries the SemVer form) via the standalone script;
+# it lives in the repository but might not in a build context
+STAMP_VERSION = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             'lib', 'ansible-galaxy', 'stamp-version')
+if os.path.exists(STAMP_VERSION):
+    subprocess.call([sys.executable, STAMP_VERSION])
+
 MANPAGES_1 = []
 MANPAGES_5 = []
 if os.path.exists('docs/_build/man'):
@@ -95,15 +102,17 @@ else:
     print('Warning: manual pages not built')
 
 setup(
-    install_requires=['distro', 'future', 'jinja2', 'pyyaml',
-                      'pyxdg', 'toml', 'python-dotenv'],
+    install_requires=['distro', 'future', 'jinja2', 'packaging', 'pyyaml',
+                      'pyxdg', 'toml', 'python-dotenv', 'gitpython'],
     extras_require={
         'ansible': ['ansible', 'netaddr', 'passlib',
-                    'python-ldap', 'dnspython', 'pyopenssl']
+                    'python-ldap', 'dnspython', 'pyopenssl'],
+        'tests': ['pytest>=7', 'pytest-cov']
     },
     package_dir={'': 'src'},
-    packages=find_packages('src', exclude=('tests', 'docs')),
+    packages=find_packages('src', exclude=('tests', 'tests.*', 'docs')),
     data_files=[
+        ('share/doc/debops', ['CREDITS'] if os.path.exists('CREDITS') else []),
         ('share/man/man1', MANPAGES_1),
         ('share/man/man5', MANPAGES_5),
     ],
@@ -126,14 +135,14 @@ setup(
     version=unicode(RELEASE),
     description='Your Debian-based data center in a box',
     long_description=README,
+    long_description_content_type='text/markdown',
     author='DebOps Developers',
     author_email='debops-devel@lists.debops.org',
     url='https://debops.org/',
     license="GPL-3.0-or-later",
     license_files=glob.glob("LICENSES/*.txt"),
     keywords="ansible debian sysadmin",
-    python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, '
-                    '!=3.3.*, !=3.4.*, <4',
+    python_requires='>=3.8,<4',
     download_url='https://github.com/debops/debops'
                  '/archive/v' + unicode(RELEASE) + '.tar.gz',
     classifiers=[
@@ -147,14 +156,14 @@ setup(
                 'Operating System :: POSIX',
                 'Programming Language :: Other Scripting Engines',
                 'Programming Language :: Python',
-                'Programming Language :: Python :: 2',
-                'Programming Language :: Python :: 2.7',
-                'Programming Language :: Python :: 3',
-                'Programming Language :: Python :: 3.5',
-                'Programming Language :: Python :: 3.6',
-                'Programming Language :: Python :: 3.7',
                 'Programming Language :: Python :: 3.8',
                 'Programming Language :: Python :: 3.9',
+                'Programming Language :: Python :: 3.10',
+                'Programming Language :: Python :: 3.11',
+                'Programming Language :: Python :: 3.12',
+                'Programming Language :: Python :: 3.13',
+                'Programming Language :: Python :: 3.14',
+                'Programming Language :: Python :: 3.15',
                 'Topic :: System :: Installation/Setup',
                 'Topic :: System :: Systems Administration',
                 'Topic :: Utilities'

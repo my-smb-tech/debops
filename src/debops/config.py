@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
-
-# Copyright (C) 2020 Maciej Delmanowski <drybjed@gmail.com>
-# Copyright (C) 2020 DebOps <https://debops.org/>
+# Copyright (C) 2020-2023 Maciej Delmanowski <drybjed@gmail.com>
+# Copyright (C) 2020-2023 DebOps <https://debops.org/>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from .utils import unexpanduser
+from .constants import DEBOPS_PACKAGE_DATA
+from .utils import unexpanduser, strtobool
 import os
 import sys
 import dotenv
@@ -14,7 +13,6 @@ import collections.abc
 import toml
 import json
 import yaml
-from distutils.util import strtobool
 from xdg.BaseDirectory import xdg_config_home
 try:
     import configparser
@@ -27,6 +25,12 @@ class Configuration(object):
     def __init__(self):
 
         self._env_files = []
+        self._env_vars = {}
+
+        # Set default environment variables at runtime
+        self.set_env('DEBOPS_ANSIBLE_COLLECTIONS_PATH',
+                     unexpanduser(os.path.join(DEBOPS_PACKAGE_DATA, 'ansible',
+                                               'collections')))
 
         # Include variables from the system-wide configuration
         self.merge_env(os.path.join('/etc', 'default', 'debops'))
@@ -54,6 +58,16 @@ class Configuration(object):
         self._config_files = []
         for config_dir in self._config_dirs:
             self.merge(config_dir)
+
+    def _expand_env_vars(self, data):
+        if isinstance(data, str):
+            return os.path.expandvars(data)
+        elif isinstance(data, dict):
+            return {k: self._expand_env_vars(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self._expand_env_vars(v) for v in data]
+        else:
+            return data
 
     def _merge_dict(self, d1, d2):
         """
@@ -86,10 +100,14 @@ class Configuration(object):
         return self._config
 
     def get_env(self, key):
-        return os.environ[key]
+        try:
+            return os.environ[key]
+        except KeyError:
+            return None
 
     def set_env(self, key, value):
         os.environ[key] = str(value)
+        self._env_vars[key] = str(value)
 
     def get(self, items=None):
         if items:
@@ -105,15 +123,42 @@ class Configuration(object):
         else:
             return self._config
 
+    def _merge_env_file(self, path):
+        """Parse an environment file once and merge it into the environment.
+
+        The file is parsed only once so that a variable which references its
+        own previous value (for example 'PATH=/extra/bin:${PATH}') is not
+        applied twice; a 'dotenv.load_dotenv()' call followed by
+        'dotenv.dotenv_values()' would interpolate the second parse against
+        the results of the first.
+
+        In PATH-style variables (PATH itself and any variable ending with
+        'PATH'), a '~' at the start of a colon-separated entry is expanded
+        to the home directory; the shell and shutil.which() do not expand it
+        during command lookup, so a literal tilde would silently never match
+        (other variables are left alone, their consumers like Ansible expand
+        '~' on their own).
+        """
+        values = {}
+        for key, value in dotenv.dotenv_values(path).items():
+            if value is not None and (key == 'PATH'
+                                      or key.endswith('PATH')):
+                value = ':'.join(os.path.expanduser(entry)
+                                 for entry in value.split(':'))
+            values[key] = value
+            if value is not None:
+                os.environ[key] = value
+        self._env_vars.update(values)
+
     def merge_env(self, path):
         if os.path.exists(os.path.join(path, '.env')):
             if os.path.isfile(os.path.join(path, '.env')):
                 self._env_files.append(os.path.join(path, '.env'))
-                dotenv.load_dotenv(os.path.join(path, '.env'), override=True)
+                self._merge_env_file(os.path.join(path, '.env'))
         elif os.path.exists(path):
             if os.path.isfile(path):
                 self._env_files.append(path)
-                dotenv.load_dotenv(path, override=True)
+                self._merge_env_file(path)
 
     def load(self, path):
         if os.path.exists(path):
@@ -121,7 +166,7 @@ class Configuration(object):
                 return self._load_config_file(path)
             elif os.path.isdir(path):
                 data = {}
-                for config_file in os.listdir(path):
+                for config_file in sorted(os.listdir(path)):
                     if os.path.isfile(os.path.join(path, config_file)):
                         self._merge_dict(data,
                                          self._load_config_file(
@@ -149,17 +194,20 @@ class Configuration(object):
             self._config_files.append(path)
             with open(path, 'r') as fp:
                 data = toml.loads(fp.read())
+                data = self._expand_env_vars(data)
                 return data
         elif path.endswith('.json'):
             self._config_files.append(path)
             with open(path, 'r') as fp:
                 data = json.loads(fp.read())
+                data = self._expand_env_vars(data)
                 return data
         elif (path.endswith('.yaml') or path.endswith('.yml')):
             self._config_files.append(path)
             with open(path, 'r') as fp:
                 try:
                     data = yaml.safe_load(fp.read())
+                    data = self._expand_env_vars(data)
                     return data
                 except yaml.YAMLError as e:
                     print('Error in configuration file:', path + ':\n', e,
@@ -200,25 +248,76 @@ class Configuration(object):
                              .update({key: value}))
             return self._converted_data
 
-    def show_env(self):
-        for key, value in os.environ.items():
-            print('{}={}'.format(key, value))
+    def config_list(self):
+        relative_root = os.path.relpath(os.path.abspath('/'))
+        if self._env_files:
+            print('# Environment files:')
+            for filename in self._env_files:
+                relative_file = os.path.relpath(unexpanduser(filename))
+                print(relative_file.replace(relative_root, '', 1))
+            print()
+        if self._config_files:
+            print('# Configuration files:')
+            for filename in self._config_files:
+                relative_file = os.path.relpath(unexpanduser(filename))
+                print(relative_file.replace(relative_root, '', 1))
 
-    def show(self, format='toml'):
-        if format == 'toml':
-            relative_root = os.path.relpath(os.path.abspath('/'))
-            if self._env_files:
-                print('# Environment files:')
-                for filename in self._env_files:
-                    relative_file = os.path.relpath(unexpanduser(filename))
-                    print('#    ', relative_file.replace(relative_root, '', 1))
-                print()
-            if self._config_files:
-                print('# Configuration files:')
-                for filename in self._config_files:
-                    relative_file = os.path.relpath(unexpanduser(filename))
-                    print('#   ', relative_file.replace(relative_root, '', 1))
-                print()
-            print(toml.dumps(self._config).strip())
-        elif format == 'json':
-            print(json.dumps(self._config, sort_keys=True, indent=4))
+    def config_get(self, key, format='unix', keys=False):
+        key_path = ['.']
+        if key != '.':
+            key_path = list(filter(None, key.split('.')))
+        key_found = True
+
+        _config = self._config
+        if key_path[0] != '.':
+            for element in key_path:
+                try:
+                    _config = _config[element]
+                except KeyError:
+                    key_found = False
+
+        if key_found and keys:
+            try:
+                _config = list(_config.keys())
+            except AttributeError:
+                # The value is present, but we are interested in just the keys,
+                # so let's return an empty list instead of a dictionary to
+                # preserve the output type. This also causes the return code to
+                # be 0 instead of 1 so that the process knows that there was no
+                # error.
+                _config = []
+
+        if key_found:
+            if isinstance(_config, dict):
+                if format in ['unix', 'yaml']:
+                    print(yaml.dump(_config).strip())
+                elif format == 'json':
+                    print(json.dumps(_config, sort_keys=True, indent=2))
+                elif format == 'toml':
+                    print(toml.dumps(_config).strip())
+            elif isinstance(_config, bool):
+                if format == 'unix':
+                    print(json.dumps(_config))
+                elif format == 'yaml':
+                    print(yaml.dump(_config).strip())
+                elif format in ['json', 'toml']:
+                    print(json.dumps(_config))
+            elif isinstance(_config, list):
+                if format == 'unix':
+                    for entry in _config:
+                        print(entry)
+                elif format == 'yaml':
+                    print(yaml.dump(_config).strip())
+                elif format in ['json', 'toml']:
+                    print(json.dumps(_config, sort_keys=True))
+            else:
+                if format == 'unix':
+                    print(_config)
+                elif format == 'yaml':
+                    print(yaml.dump(_config).strip())
+                elif format in ['json', 'toml']:
+                    print(json.dumps(_config))
+        else:
+            if format == 'json':
+                print('{}')
+            sys.exit(1)

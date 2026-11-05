@@ -9,7 +9,7 @@
 
 - name: Install required packages
   ansible.builtin.package:
-    name: '{{ q("flattened", (([ "php5-memcached" ]
+    name: '{{ q("flattened", ((["php5-memcached"]
                                if librenms__memcached | d()
                                else [])
                               + librenms__base_packages
@@ -108,9 +108,10 @@
   tags: [ 'role::librenms:config', 'role::librenms:database', 'role::librenms:snmp_conf' ]
 
 - name: Create LibreNMS database
-  mysql_db:
+  ansible.mysql.mysql_db:
     name: '{{ librenms__database_name }}'
     state: 'present'
+    login_unix_socket: '/run/mysqld/mysqld.sock'
   delegate_to: '{{ ansible_local.mariadb.delegate_to }}'
   register: librenms__register_database_status
   tags: [ 'role::librenms:database' ]
@@ -125,12 +126,12 @@
   tags: [ 'role::librenms:config', 'role::librenms:database' ]
 
 - name: Install missing PHP packages via Composer
-  composer:  # noqa no-handler
+  community.general.composer:  # noqa no-handler
     command: 'install'
     working_dir: '{{ librenms__install_path }}'
   register: librenms__register_composer
   until: librenms__register_composer is succeeded
-  when: (librenms__register_database_status | d() and librenms__register_database_status is changed)
+  when: (librenms__register_database_status is defined and librenms__register_database_status is changed)
   become: True
   become_user: '{{ librenms__user }}'
 
@@ -140,7 +141,9 @@
     chdir: '{{ librenms__install_path }}'
   become: True
   become_user: '{{ librenms__user }}'
-  when: (librenms__register_database_status | d() and librenms__register_database_status is changed)
+  register: librenms__register_database_init
+  changed_when: librenms__register_database_init.changed | bool
+  when: (librenms__register_database_status is defined and librenms__register_database_status is changed)
   tags: [ 'role::librenms:database' ]
 
 - name: Get list of existing users from LibreNMS database
@@ -161,6 +164,8 @@
   become: True
   become_user: '{{ librenms__user }}'
   with_items: '{{ librenms__admin_accounts }}'
+  register: librenms__register_admin_accounts
+  changed_when: librenms__register_admin_accounts.changed | bool
   when: (librenms__admin_accounts | d([]) and (item not in librenms__register_users.stdout_lines))
   no_log: '{{ debops__no_log | d(True) }}'
   tags: [ 'role::librenms:config', 'role::librenms:admins' ]
@@ -182,7 +187,7 @@
   register: librenms__register_passwd
   changed_when: False
   check_mode: False
-  when: librenms__home_snmp_conf | d() and librenms__home_snmp_conf
+  when: librenms__home_snmp_conf is defined and librenms__home_snmp_conf is truthy
   tags: [ 'role::librenms:config', 'role::librenms:snmp_conf' ]
 
 - name: Create ~/.snmp directories
@@ -194,8 +199,8 @@
     mode: '0700'
   with_items: '{{ librenms__home_snmp_conf }}'
   check_mode: False
-  when: ((librenms__home_snmp_conf | d() and librenms__home_snmp_conf) and
-         (librenms__register_passwd | d() and item in librenms__register_passwd.stdout_lines))
+  when: ((librenms__home_snmp_conf is defined and librenms__home_snmp_conf is truthy) and
+         (librenms__register_passwd is defined and item in librenms__register_passwd.stdout_lines))
   tags: [ 'role::librenms:config', 'role::librenms:snmp_conf' ]
 
 - name: Generate ~/.snmp/snmp.conf configuration
@@ -206,8 +211,8 @@
     group: '{{ item }}'
     mode: '0600'
   with_items: '{{ librenms__home_snmp_conf }}'
-  when: ((librenms__home_snmp_conf | d() and librenms__home_snmp_conf) and
-         (librenms__register_passwd | d() and item in librenms__register_passwd.stdout_lines))
+  when: ((librenms__home_snmp_conf is defined and librenms__home_snmp_conf is truthy) and
+         (librenms__register_passwd is defined and item in librenms__register_passwd.stdout_lines))
   tags: [ 'role::librenms:config', 'role::librenms:snmp_conf' ]
 
 - name: Get list of known devices from LibreNMS database
@@ -225,5 +230,7 @@
   become: True
   become_user: '{{ librenms__user }}'
   with_items: '{{ librenms__devices }}'
+  register: librenms__register_addhost
+  changed_when: librenms__register_addhost.changed | bool
   when: (librenms__devices | d([]) and (item not in librenms__register_devices.stdout_lines))
   tags: [ 'role::librenms:config', 'role::librenms:devices' ]

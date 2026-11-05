@@ -29,7 +29,7 @@
     name: '{{ kibana__user }}'
     groups: '{{ kibana__additional_groups }}'
     append: True
-  when: kibana__additional_groups | d()
+  when: kibana__additional_groups is truthy
 
 - name: Make sure that Ansible local facts directory exists
   ansible.builtin.file:
@@ -58,7 +58,7 @@
   register: kibana__register_dependent_config_file
   become: False
   delegate_to: 'localhost'
-  when: (ansible_local.kibana.installed | d())
+  when: (ansible_local.kibana.installed is defined and ansible_local.kibana.installed is truthy)
   tags: [ 'role::kibana:config' ]
 
 - name: Load the dependent configuration from Ansible Controller
@@ -67,12 +67,12 @@
   register: kibana__register_dependent_config
   become: False
   delegate_to: 'localhost'
-  when: (ansible_local.kibana.installed | d() and
+  when: (ansible_local.kibana.installed is defined and ansible_local.kibana.installed is truthy and
          kibana__register_dependent_config_file.stat.exists | bool)
   tags: [ 'role::kibana:config' ]
 
 - name: Divert original configuration files
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '/etc/kibana/kibana.yml'
   notify: [ 'Start kibana' ]
   tags: [ 'role::kibana:config' ]
@@ -106,9 +106,10 @@
   notify: [ 'Restart kibana' ]
   become: True
   become_user: '{{ item.user | d(kibana__user) }}'
-  with_flattened:
-    - '{{ kibana__combined_plugins }}'
-  when: (item.name | d() and item.state | d('present') != 'absent' and
+  loop: '{{ q("flattened", kibana__combined_plugins) }}'
+  register: kibana__register_plugin_install
+  changed_when: kibana__register_plugin_install.changed | bool
+  when: (item.name is defined and item.name is truthy and item.state | d('present') != 'absent' and
          (item.name if ':' not in item.name else item.name.split(':')[1]) not in kibana__register_plugins.stdout_lines)
 
 - name: Remove Kibana plugins
@@ -118,9 +119,10 @@
   notify: [ 'Restart kibana' ]
   become: True
   become_user: '{{ item.user | d(kibana__user) }}'
-  with_flattened:
-    - '{{ kibana__combined_plugins }}'
-  when: (item.name | d() and item.state | d('present') == 'absent' and
+  loop: '{{ q("flattened", kibana__combined_plugins) }}'
+  register: kibana__register_plugin_remove
+  changed_when: kibana__register_plugin_remove.changed | bool
+  when: (item.name is defined and item.name is truthy and item.state | d('present') == 'absent' and
          (item.name if ':' not in item.name else item.name.split(':')[1]) in kibana__register_plugins.stdout_lines)
 
 # The keystore handling is very similar to ../../metricbeat/tasks/main.yml
@@ -134,6 +136,8 @@
   ansible.builtin.command: 'bin/kibana-keystore create'
   args:
     chdir: '/usr/share/kibana'
+  register: kibana__register_keystore_create
+  changed_when: kibana__register_keystore_create.changed | bool
   when: not kibana__register_keystore.stat.exists
 
 - name: Get the list of keystore contents
@@ -152,6 +156,8 @@
   loop_control:
     label:  '{{ {"name": item.name, "state": item.state} }}'
   notify: [ 'Restart kibana' ]
+  register: kibana__register_keystore_remove
+  changed_when: kibana__register_keystore_remove.changed | bool
   when: (item.state | d('present') == 'absent' and
          item.name in kibana__register_keys.stdout_lines)
   no_log: '{{ debops__no_log | d(True) }}'
@@ -173,7 +179,9 @@
   loop_control:
     label:  '{{ {"name": item.name, "state": item.state} }}'
   notify: [ 'Restart kibana' ]
-  when: (item.state | d('present') not in [ 'absent', 'ignore', 'init' ] and
+  register: kibana__register_keystore_add
+  changed_when: kibana__register_keystore_add.changed | bool
+  when: (item.state | d('present') not in ['absent', 'ignore', 'init'] and
          (item.name not in kibana__register_keys.stdout_lines or
           (item.force | d(False)) | bool))
   no_log: '{{ debops__no_log | d(True) }}'

@@ -4,8 +4,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 - name: Configure Icinga Web service
-  collections: [ 'debops.debops', 'debops.roles01',
-                 'debops.roles02', 'debops.roles03' ]
+  collections: [ 'debops.debops' ]
   hosts: [ 'debops_service_icinga_web' ]
   become: True
 
@@ -99,6 +98,8 @@
         - '{{ icinga_web__postgresql__dependent_groups }}'
       postgresql__dependent_databases:
         - '{{ icinga_web__postgresql__dependent_databases }}'
+      postgresql__dependent_privileges:
+        - '{{ icinga_web__postgresql__dependent_privileges }}'
       postgresql__dependent_extensions:
         - '{{ icinga_web__postgresql__dependent_extensions }}'
       when: icinga_web__database_type == 'postgresql'

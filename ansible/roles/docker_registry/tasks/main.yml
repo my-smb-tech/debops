@@ -24,7 +24,7 @@
   until: docker_registry__register_packages is succeeded
 
 - name: Divert the original docker-registry config file
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '/etc/docker/registry/config.yml'
   notify: [ 'Restart docker-registry' ]
 
@@ -94,7 +94,7 @@
       register: docker_registry__register_source
 
     - name: Build Docker Registry binaries
-      environment:
+      environment:  # noqa no-handler
         GOPATH: '{{ docker_registry__gopath }}'
         GOCACHE: '{{ docker_registry__gopath + "/cache" }}'
       ansible.builtin.command: 'make clean binaries'
@@ -102,6 +102,7 @@
         chdir: '{{ docker_registry__git_dest }}'
       when: docker_registry__register_source is changed
       register: docker_registry__register_build
+      changed_when: docker_registry__register_build.changed | bool
 
 - name: Install Docker Registry binary
   ansible.builtin.copy:  # noqa no-handler

@@ -6,8 +6,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 - name: Install and manage ownCloud instances with Nginx as webserver
-  collections: [ 'debops.debops', 'debops.roles01',
-                 'debops.roles02', 'debops.roles03' ]
+  collections: [ 'debops.debops' ]
   hosts: [ 'debops_service_owncloud', 'debops_service_owncloud_nginx' ]
   become: True
 
@@ -122,6 +121,8 @@
 
     - role: nginx
       tags: [ 'role::nginx', 'skip::nginx' ]
+      nginx__dependent_maps:
+        - '{{ owncloud__nginx__dependent_maps }}'
       nginx__dependent_servers:
         - '{{ owncloud__nginx__dependent_servers }}'
       nginx__dependent_upstreams:

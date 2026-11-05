@@ -3,8 +3,12 @@
 # Copyright (C) 2016 DebOps <https://debops.org/>
 # SPDX-License-Identifier: GPL-3.0-only
 
+- name: Import DebOps global handlers
+  ansible.builtin.import_role:
+    name: 'global_handlers'
+
 - name: Configure /etc/environment
-  ansible.builtin.blockinfile:
+  ansible.builtin.blockinfile:  # noqa args[module]
     dest: '{{ environment__file }}'
     state: '{{ "present" if environment__enabled | bool else "absent" }}'
     block: '{{ lookup("template", "lookup/environment__variables.j2") }}'
@@ -26,4 +30,8 @@
     owner: 'root'
     group: 'root'
     mode: '0644'
+  notify: [ 'Refresh host facts' ]
   tags: [ 'meta::facts' ]
+
+- name: Reload facts if they were modified
+  ansible.builtin.meta: 'flush_handlers'

@@ -50,13 +50,13 @@
 
     # Get latest patch version for release [[[2
 
-    - name: Query for the full version string of the current release
-      ansible.builtin.shell: curl -s -m 900 {{ (owncloud__variant_download_url_map[owncloud__variant] + "/") | quote }}
+    - name: Query for the full version string of the current release  # noqa command-instead-of-module
+      ansible.builtin.shell: set -o nounset -o pipefail -o errexit &&
+                             curl -s -m 900 {{ (owncloud__variant_download_url_map[owncloud__variant] + "/") | quote }}
              | sed --silent 's/.*href="nextcloud-\({{ owncloud__release | regex_escape() }}[^"]\+\).zip.asc".*/\1/p'
              | sort --version-sort --reverse
       args:
-        warn: False
-        executable: 'sh'
+        executable: 'bash'
       register: owncloud__register_full_version
       changed_when: False
       check_mode: False
@@ -90,19 +90,20 @@
     # Nextcloud application archive authenticity verification [[[2
 
     - name: Read checksum from file
-      ansible.builtin.shell: cat {{ owncloud__src + "/" + owncloud__variant + "/"
+      ansible.builtin.shell: set -o nounset -o pipefail -o errexit &&
+                             cat {{ owncloud__src + "/" + owncloud__variant + "/"
                     + owncloud__register_full_version.stdout_lines[0] + "/"
                     + owncloud__variant + "-" + owncloud__register_full_version.stdout_lines[0]
                     + ".zip.sha512" }} | grep '.zip$'
       args:
-        executable: 'sh'
+        executable: 'bash'
       changed_when: False
       register: owncloud__register_checksum
       when: not ansible_check_mode  # Latest checksum file may not be available
       tags: [ 'role::nextcloud:download', 'role::nextcloud:verify' ]
 
     - name: Download application archive
-      ansible.builtin.get_url:
+      ansible.builtin.get_url:  # noqa no-handler
         url: '{{ owncloud__variant_download_url_map[owncloud__variant] + "/" +
                  owncloud__variant + "-" + owncloud__register_full_version.stdout_lines[0] + ".zip" }}'
         dest: '{{ owncloud__src + "/" + owncloud__variant + "/" + owncloud__register_full_version.stdout_lines[0] }}'
@@ -132,8 +133,8 @@
       changed_when: False
       register: owncloud__register_verify_authenticity
       failed_when: (owncloud__register_verify_authenticity.rc != 0 or
-                    (owncloud__register_verify_authenticity.stdout | replace(" ",""))
-                    != (owncloud__upstream_key_fingerprint | replace(" ","")))
+                    (owncloud__register_verify_authenticity.stdout | replace(" ", ""))
+                    != (owncloud__upstream_key_fingerprint | replace(" ", "")))
       tags: [ 'role::nextcloud:verify' ]
 
 - name: Unpack the application archive

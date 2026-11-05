@@ -36,7 +36,7 @@
     dir: '{{ secret + "/icinga/dependent_config/" + inventory_hostname }}'
     depth: 1
     name: 'icinga__vars_dependent_configuration'
-  when: (ansible_local | d() and ansible_local.icinga | d() and
+  when: (ansible_local is defined and ansible_local.icinga is defined and
          (ansible_local.icinga.configured | d()) | bool)
 
 - name: Make sure that Ansible local facts directory exists
@@ -61,53 +61,53 @@
   ansible.builtin.meta: 'flush_handlers'
 
 - name: Add/remove diversion of Icinga configuration files
-  dpkg_divert:
-    path: '{{ "/etc/icinga2/" + item.filename | d(item.name | regex_replace(".conf$","") + ".conf") }}'
+  debops.debops.dpkg_divert:
+    path: '{{ "/etc/icinga2/" + item.filename | d(item.name | regex_replace(".conf$", "") + ".conf") }}'
     state: '{{ item.state | d("present") }}'
     delete: True
   loop: '{{ icinga__combined_configuration | debops.debops.parse_kv_items }}'
   loop_control:
-    label: '{{ { "name": item.name, "state": item.state | d("present") } }}'
+    label: '{{ {"name": item.name, "state": item.state | d("present")} }}'
   notify: [ 'Check icinga2 configuration and restart' ]
-  when: (item.name | d() and
-         item.state | d('present') in [ 'absent', 'present' ] and
+  when: (item.name is defined and item.name is truthy and
+         item.state | d('present') in ['absent', 'present'] and
          item.divert | d(False) | bool)
 
 - name: Ensure that configuration directories exist
   ansible.builtin.file:
-    path: '/etc/icinga2/{{ (item.filename | d(item.name | regex_replace(".conf$","") + ".conf")) | dirname }}'
+    path: '/etc/icinga2/{{ (item.filename | d(item.name | regex_replace(".conf$", "") + ".conf")) | dirname }}'
     state: 'directory'
     owner: 'root'
     group: 'root'
     mode: '0755'
   with_items: '{{ icinga__combined_configuration | debops.debops.parse_kv_items }}'
-  when: (item.name | d() and item.state | d('present') not in [ 'absent', 'ignore', 'init', 'feature' ] and
-         ((item.filename | d(item.name | regex_replace(".conf$","") + ".conf")) | dirname | d()))
+  when: (item.name is defined and item.name is truthy and item.state | d('present') not in ['absent', 'ignore', 'init', 'feature'] and
+         (((item.filename | d(item.name | regex_replace(".conf$", "") + ".conf")) | dirname | d()) is truthy))
 
 - name: Remove Icinga configuration files
   ansible.builtin.file:
-    path: '/etc/icinga2/{{ item.filename | d(item.name | regex_replace(".conf$","") + ".conf") }}'
+    path: '/etc/icinga2/{{ item.filename | d(item.name | regex_replace(".conf$", "") + ".conf") }}'
     state: 'absent'
   with_items: '{{ icinga__combined_configuration | debops.debops.parse_kv_items }}'
   notify: [ 'Check icinga2 configuration and restart' ]
-  when: (item.name | d() and item.state | d('present') == 'absent' and
+  when: (item.name is defined and item.name is truthy and item.state | d('present') == 'absent' and
          not item.divert | d(False) | bool)
 
 - name: Generate Icinga configuration files
   ansible.builtin.template:
     src: 'etc/icinga2/template.conf.j2'
-    dest: '/etc/icinga2/{{ item.filename | d(item.name | regex_replace(".conf$","") + ".conf") }}'
+    dest: '/etc/icinga2/{{ item.filename | d(item.name | regex_replace(".conf$", "") + ".conf") }}'
     owner: '{{ item.owner | d("root") }}'
     group: '{{ item.group | d("root") }}'
-    mode:  '{{ item.mode  | d("0644") }}'
+    mode:  '{{ item.mode | d("0644") }}'
   with_items: '{{ icinga__combined_configuration | debops.debops.parse_kv_items }}'
   notify: [ 'Check icinga2 configuration and restart' ]
-  when: (item.name | d() and item.state | d('present') not in [ 'absent', 'ignore', 'init', 'divert', 'feature' ])
+  when: (item.name is defined and item.name is truthy and item.state | d('present') not in ['absent', 'ignore', 'init', 'divert', 'feature'])
   no_log: '{{ debops__no_log | d(item.no_log) | d(False) }}'
 
 - name: Ensure that configuration directories exist on the master node
   ansible.builtin.file:
-    path: '/etc/icinga2/zones.d/{{ (item.filename | d(item.name | regex_replace(".conf$","") + ".conf")) | dirname }}'
+    path: '/etc/icinga2/zones.d/{{ (item.filename | d(item.name | regex_replace(".conf$", "") + ".conf")) | dirname }}'
     state: 'directory'
     recurse: true
     owner: 'root'
@@ -115,29 +115,29 @@
     mode: '0755'
   with_items: '{{ icinga__master_combined_configuration | debops.debops.parse_kv_items }}'
   delegate_to: '{{ icinga__master_delegate_to }}'
-  when: (item.name | d() and item.state | d('present') not in [ 'absent', 'ignore', 'init', 'feature' ] and
-         ((item.filename | d(item.name | regex_replace(".conf$","") + ".conf")) | dirname | d()))
+  when: (item.name is defined and item.name is truthy and item.state | d('present') not in ['absent', 'ignore', 'init', 'feature'] and
+         (((item.filename | d(item.name | regex_replace(".conf$", "") + ".conf")) | dirname | d()) is truthy))
 
 - name: Remove Icinga configuration on the master node if requested
   ansible.builtin.file:
-    path: '/etc/icinga2/zones.d/{{ item.filename | d(item.name | regex_replace(".conf$","") + ".conf") }}'
+    path: '/etc/icinga2/zones.d/{{ item.filename | d(item.name | regex_replace(".conf$", "") + ".conf") }}'
     state: 'absent'
   with_items: '{{ icinga__master_combined_configuration | debops.debops.parse_kv_items }}'
   delegate_to: '{{ icinga__master_delegate_to }}'
   notify: [ 'Check icinga2 configuration and restart it on the master node' ]
-  when: (item.name | d() and item.state | d('present') == 'absent')
+  when: (item.name is defined and item.name is truthy and item.state | d('present') == 'absent')
 
 - name: Generate Icinga configuration files on the master node
   ansible.builtin.template:
     src: 'etc/icinga2/template.conf.j2'
-    dest: '/etc/icinga2/zones.d/{{ item.filename | d(item.name | regex_replace(".conf$","") + ".conf") }}'
+    dest: '/etc/icinga2/zones.d/{{ item.filename | d(item.name | regex_replace(".conf$", "") + ".conf") }}'
     owner: '{{ item.owner | d("root") }}'
     group: '{{ item.group | d("root") }}'
-    mode:  '{{ item.mode  | d("0644") }}'
+    mode:  '{{ item.mode | d("0644") }}'
   with_items: '{{ icinga__master_combined_configuration | debops.debops.parse_kv_items }}'
   delegate_to: '{{ icinga__master_delegate_to }}'
   notify: [ 'Check icinga2 configuration and restart it on the master node' ]
-  when: (item.name | d() and item.state | d('present') not in [ 'absent', 'ignore', 'init', 'divert', 'feature' ])
+  when: (item.name is defined and item.name is truthy and item.state | d('present') not in ['absent', 'ignore', 'init', 'divert', 'feature'])
   no_log: '{{ debops__no_log | d(item.no_log) | d(False) }}'
 
 - name: Configure state of Icinga features
@@ -150,24 +150,23 @@
     force: '{{ True if ansible_check_mode | bool else omit }}'
   with_items: '{{ icinga__combined_configuration | debops.debops.parse_kv_items }}'
   notify: [ 'Check icinga2 configuration and restart' ]
-  when: (item.name | d() and item.state | d('present') not in [ 'absent', 'ignore', 'init', 'divert' ] and
-         item.feature_name | d() and item.feature_state | d())
+  when: (item.name is defined and item.name is truthy and item.state | d('present') not in ['absent', 'ignore', 'init', 'divert'] and
+         item.feature_name is defined and item.feature_name is truthy and item.feature_state is defined and item.feature_state is truthy)
 
 - name: Copy custom files for Icinga
   ansible.builtin.copy:
     content: '{{ item.content | d(omit) }}'
-    src:     '{{ item.src     | d(omit) }}'
-    dest:    '{{ item.dest    | d(omit) }}'
-    force:   '{{ item.force   | d(omit) }}'
-    owner:   '{{ item.owner   | d("root") }}'
-    group:   '{{ item.group   | d("root") }}'
-    mode:    '{{ item.mode    | d("0755") }}'
-  with_flattened:
-    - '{{ icinga__custom_files }}'
-    - '{{ icinga__group_custom_files }}'
-    - '{{ icinga__host_custom_files }}'
-  when: ((item.src | d() or item.content | d()) and
-         item.dest | d() and item.state | d("present") != "absent")
+    src:     '{{ item.src | d(omit) }}'
+    dest:    '{{ item.dest | d(omit) }}'
+    force:   '{{ item.force | d(omit) }}'
+    owner:   '{{ item.owner | d("root") }}'
+    group:   '{{ item.group | d("root") }}'
+    mode:    '{{ item.mode | d("0755") }}'
+  loop: '{{ q("flattened", icinga__custom_files
+                           + icinga__group_custom_files
+                           + icinga__host_custom_files) }}'
+  when: (((item.src is defined and item.src is truthy) or (item.content is defined and item.content is truthy)) and
+         item.dest is defined and item.dest is truthy and item.state | d("present") != "absent")
 
 - name: Save dependent configuration on Ansible Controller
   ansible.builtin.template:
@@ -187,12 +186,12 @@
     url: '{{ icinga__director_register_api_url }}'
     user: '{{ icinga__director_register_api_user }}'
     password: '{{ icinga__director_register_api_password }}'
-    status_code: '201,422,500'
+    status_code: [ 201, 422, 500 ]
     force_basic_auth: True
   register: icinga__register_director_host
   notify: [ 'Trigger Icinga Director configuration deployment' ]
-  when: icinga__director_enabled | bool and icinga__director_register | bool and
-        icinga__node_type != 'master'
+  when: (icinga__director_enabled | bool and icinga__director_register | bool and
+         (icinga__node_type != 'master' or (ansible_local.icinga_web.installed | d()) | bool))
   changed_when: icinga__register_director_host.status == 201
   tags: [ 'role::icinga:register' ]
   no_log: '{{ debops__no_log | d(True) }}'

@@ -12,9 +12,8 @@
     name: '{{ item.name if item.name | d() else item }}'
     system: '{{ item.system | bool if item.system is defined else gitlab_runner__system | bool }}'
     state: 'present'
-  with_flattened:
-    - '{{ gitlab_runner__group }}'
-    - '{{ gitlab_runner__additional_groups }}'
+  loop: '{{ q("flattened", [gitlab_runner__group]
+                           + gitlab_runner__additional_groups) }}'
 
 - name: Create gitlab-runner user
   ansible.builtin.user:
@@ -41,7 +40,7 @@
     name: '{{ gitlab_runner__user }}'
     groups: 'docker'
     append: True
-  when: (ansible_local | d() and ansible_local.docker_server | d() and
+  when: (ansible_local is defined and ansible_local.docker_server is defined and
          (ansible_local.docker_server.installed | d()) | bool)
 
 - name: Copy custom files to GitLab Runner host
@@ -55,11 +54,12 @@
     directory_mode: '{{ item.directory_mode | d(omit) }}'
     follow: '{{ item.follow | d(omit) }}'
     force: '{{ item.force | d(omit) }}'
-  with_flattened:
-    - '{{ gitlab_runner__custom_files }}'
-    - '{{ gitlab_runner__group_custom_files }}'
-    - '{{ gitlab_runner__host_custom_files }}'
-  when: ((item.src | d() or item.content | d()) and item.dest | d())
+  loop: '{{ q("flattened", gitlab_runner__custom_files
+                           + gitlab_runner__group_custom_files
+                           + gitlab_runner__host_custom_files) }}'
+  when: (((item.src is defined and item.src is truthy) or
+          (item.content is defined and item.content is truthy)) and
+         item.dest is defined and item.dest is truthy)
 
 - name: Make sure APT can access HTTPS repositories
   ansible.builtin.apt:
@@ -80,37 +80,43 @@
   register: gitlab_runner__register_packages
   until: gitlab_runner__register_packages is succeeded
 
-- name: Check if GitLab service is available
-  ansible.builtin.uri:
-    url: '{{ gitlab_runner__api_url }}'
-  register: gitlab_runner__register_api
-  when: gitlab_runner__api_url | d() and gitlab_runner__api_url
-  failed_when: False
-  no_log: '{{ debops__no_log | d(True) }}'
-
 - name: Register new GitLab Runners
   ansible.builtin.uri:
-    url: '{{ (item.api_url | d(gitlab_runner__api_url)) + "api/v4/runners" }}'
+    url: '{{ (item.api_url | d(gitlab_runner__api_url)) + "api/v4/user/runners" }}'
     method: 'POST'
-    body: 'token={{ item.token | d(gitlab_runner__token) }}&description={{ item.name
-           | urlencode }}&tag_list={{ ((item.tags | d([])
-                                        + (gitlab_runner__shell_tags
-                                           if (item.executor == "shell") else [])
-                                        + gitlab_runner__combined_tags) | unique | join(","))
-           | urlencode }}&run_untagged={{ item.run_untagged | d(gitlab_runner__run_untagged) }}'
+    headers:
+      'PRIVATE-TOKEN': '{{ item.api_token | d(gitlab_runner__api_token) }}'
+    body_format: 'form-urlencoded'
+    body:
+      runner_type: '{{ item.runner_type | d(gitlab_runner__runner_type) }}'
+      group_id: '{{ item.group_id | d(gitlab_runner__group_id) | d(omit) }}'
+      project_id: '{{ item.project_id | d(gitlab_runner__project_id) | d(omit) }}'
+      description: '{{ item.name }}'
+      tag_list: '{{ (item.tags | d([])
+                     + (gitlab_runner__shell_tags
+                        if (item.executor == "shell") else [])
+                     + gitlab_runner__combined_tags)
+                     | unique | join(",") }}'
+      run_untagged: '{{ item.run_untagged | d(gitlab_runner__run_untagged) }}'
+      paused: '{{ item.paused | d(omit) }}'
+      locked: '{{ item.locked | d(omit) }}'
+      access_level: '{{ item.access_level | d(omit) }}'
+      maximum_timeout: '{{ item.maximum_timeout | d(omit) }}'
+      maintenance_note: '{{ item.maintenance_note | d(omit) }}'
     status_code: '200,201'
   register: gitlab_runner__register_new_instances
-  with_flattened:
-    - '{{ gitlab_runner__default_instances }}'
-    - '{{ gitlab_runner__instances }}'
-    - '{{ gitlab_runner__group_instances }}'
-    - '{{ gitlab_runner__host_instances }}'
-  when: (gitlab_runner__register_api.status | d() and gitlab_runner__register_api.status == 200 and
-         (item.token | d() or gitlab_runner__token) and item.name and
+  loop: '{{ q("flattened", gitlab_runner__default_instances
+                           + gitlab_runner__instances
+                           + gitlab_runner__group_instances
+                           + gitlab_runner__host_instances) }}'
+  when: (((item.api_token is defined and item.api_token is truthy) or
+          (gitlab_runner__api_token is defined and gitlab_runner__api_token is truthy)) and
+         item.name is defined and item.name is truthy and
          (item.state is undefined or item.state != 'absent') and
          (ansible_local is undefined or
-          (ansible_local | d() and (ansible_local.gitlab_runner is undefined or
-           (ansible_local.gitlab_runner | d() and ansible_local.gitlab_runner.instances is defined and
+          (ansible_local is defined and (ansible_local.gitlab_runner is undefined or
+           (ansible_local.gitlab_runner is defined and
+            ansible_local.gitlab_runner.instances is defined and
             item.name not in ansible_local.gitlab_runner.instances)))))
 
 - name: Generate GitLab Runner configuration files
@@ -127,14 +133,17 @@
     url: '{{ (item.0.api_url | d(gitlab_runner__api_url)) + "api/v4/runners/" + item.1.id | string }}'
     method: 'DELETE'
     headers:
-      'PRIVATE-TOKEN': '{{ gitlab_runner__api_token }}'
+      'PRIVATE-TOKEN': '{{ item.0.api_token | d(gitlab_runner__api_token) }}'
   with_together:
     - '{{ gitlab_runner__default_instances + gitlab_runner__instances
           + gitlab_runner__group_instances + gitlab_runner__host_instances }}'
     - '{{ ansible_local.gitlab_runner.instance_tokens | d([]) }}'
-  when: (gitlab_runner__register_api.status | d() and gitlab_runner__register_api.status == 200 and
-         gitlab_runner__api_token and item.0.name | d() and item.1.name | d() and item.0.name == item.1.name and
-         (item.0.state | d() and item.0.state == 'absent'))
+  when: (((item.0.api_token is defined and item.0.api_token is truthy) or
+          (gitlab_runner__api_token is defined and gitlab_runner__api_token is truthy)) and
+         item.0.name is defined and item.0.name is truthy and
+         item.1.name is defined and item.1.name is truthy and
+         item.0.name == item.1.name and
+         (item.0.state is defined and item.0.state == 'absent'))
   failed_when: False
   no_log: '{{ debops__no_log | d(True) }}'
 
@@ -153,7 +162,9 @@
   delegate_to: '{{ item.host }}'
   become: '{{ item.become | d(True) }}'
   with_items: '{{ gitlab_runner__ssh_install_to }}'
-  when: gitlab_runner__ssh_generate | bool and item.user | d() and item.host | d()
+  when: gitlab_runner__ssh_generate | bool and
+        item.user is defined and item.user is truthy and
+        item.host is defined and item.host is truthy
 
 - name: Make sure that the ~/.ssh directory exists
   ansible.builtin.file:
@@ -162,7 +173,7 @@
     owner: '{{ gitlab_runner__user }}'
     group: '{{ gitlab_runner__group }}'
     mode: '0700'
-  when: gitlab_runner__ssh_known_hosts | d()
+  when: gitlab_runner__ssh_known_hosts is truthy
 
 - name: Make sure the ~/.ssh/known_hosts file exists
   ansible.builtin.copy:
@@ -172,7 +183,7 @@
     group: '{{ gitlab_runner__group }}'
     mode: '0644'
     force: False
-  when: gitlab_runner__ssh_known_hosts | d()
+  when: gitlab_runner__ssh_known_hosts is truthy
 
 - name: Get list of already scanned host fingerprints
   ansible.builtin.shell: set -o nounset -o pipefail -o errexit &&
@@ -180,7 +191,7 @@
   args:
     executable: 'bash'
   with_items: '{{ gitlab_runner__ssh_known_hosts }}'
-  when: gitlab_runner__ssh_known_hosts | d()
+  when: gitlab_runner__ssh_known_hosts is truthy
   register: gitlab_runner__register_known_hosts
   changed_when: False
   failed_when: False
@@ -189,6 +200,8 @@
 - name: Scan SSH fingerprints of specified hosts
   ansible.builtin.shell: 'ssh-keyscan -H -T 10 {{ item.item }} >> {{ gitlab_runner__home + "/.ssh/known_hosts" }}'
   with_items: '{{ gitlab_runner__register_known_hosts.results }}'
+  register: gitlab_runner__register_keyscan
+  changed_when: gitlab_runner__register_keyscan.changed | bool
   when: gitlab_runner__ssh_known_hosts and item is defined and item.rc > 0
   failed_when: False
 
@@ -196,10 +209,10 @@
   ansible.builtin.user:
     name: '{{ gitlab_runner__user }}'
     append: True
-    groups: '{{ ([ (ansible_local.libvirtd.unix_sock_group
-                    if (ansible_local.libvirtd.unix_sock_group | d())
-                    else "libvirt") ]
-                 + ([ "kvm" ]
+    groups: '{{ ([ansible_local.libvirtd.unix_sock_group
+                  if (ansible_local.libvirtd.unix_sock_group | d())
+                  else "libvirt"]
+                 + (["kvm"]
                     if (ansible_local | d() and ansible_local.libvirtd | d() and
                         (ansible_local.libvirtd.hw_virt | d()) | bool)
                     else [])) | join(",") }}'
@@ -212,7 +225,7 @@
     owner: 'root'
     group: 'root'
     mode: '0440'
-  when: (ansible_local | d() and ansible_local.sudo | d() and
+  when: (ansible_local is defined and ansible_local.sudo is defined and
          (ansible_local.sudo.installed | d()) | bool and
          gitlab_runner__vagrant_libvirt | bool)
 
@@ -227,7 +240,7 @@
 - name: Patch 'vagrant-libvirt' source code
   ansible.posix.patch:
     src: '{{ "patches/package_domain-keep-ssh-host-keys-"
-             + (item | basename | replace("vagrant-libvirt-","")) + ".patch" }}'
+             + (item | basename | replace("vagrant-libvirt-", "")) + ".patch" }}'
     basedir: '{{ item }}'
     state: '{{ gitlab_runner__vagrant_libvirt_patch_state }}'
   with_items: '{{ gitlab_runner__register_libvirt_source.stdout_lines }}'
@@ -241,7 +254,7 @@
     owner: 'root'
     group: 'root'
     mode: '0440'
-  when: (ansible_local | d() and ansible_local.sudo | d() and
+  when: (ansible_local is defined and ansible_local.sudo is defined and
          (ansible_local.sudo.installed | d()) | bool and
          gitlab_runner__vagrant_lxc | bool)
 

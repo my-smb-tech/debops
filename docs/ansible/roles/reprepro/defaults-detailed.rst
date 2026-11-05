@@ -278,7 +278,7 @@ defines an "instance" using specific parameters:
   :command:`nginx` configuration.
 
   This parameter shouldn't be used when the ``outdir`` parameter is specified,
-  to not crate a duplicate :command:`nginx` configuration which can interfere
+  to not create a duplicate :command:`nginx` configuration which can interfere
   with the other APT repository instances.
 
 ``public``
@@ -325,6 +325,13 @@ defines an "instance" using specific parameters:
   the FQDN and domain of the server; this parameter can be used to override
   that detection if needed.
 
+``basedir``
+  Optional. Override the base directory of the :command:`reprepro` repository,
+  which contains the internal state database and repository configuration
+  files. If not specified, the repository database will be locaed in the
+  :envvar:`reprepro__data_root` variable location (by default
+  :file:`/var/local/reprepro/repositories/` directory).
+
 ``outdir``
   Optional. Override the public directory where :command:`reprepro` manages the
   APT repository contents. This can be used to combine multiple APT repository
@@ -349,7 +356,7 @@ defines an "instance" using specific parameters:
   case of multiple repositories using the same FQDN with the ``outdir``
   parameter or if the default path should be different, the ``upload_map``
   parameter can define a YAML dictionary. Each key should be a subdirectory off
-  of the APT repository URL, and the vaule should be an absolute path to the
+  of the APT repository URL, and the value should be an absolute path to the
   filesystem directory monitored for new uploads. An empty value (``''``) can
   be used to let the role generate the directory path automatically, based on
   the standardized directory structure maintained by the :ref:`debops.reprepro`
@@ -407,7 +414,7 @@ defines an "instance" using specific parameters:
 
   The configuration is defined as a list of YAML dictionaries, each dictionary
   can define a single distribution. The ``name`` parameter is used to define
-  a distribution but can be overriden by the ``Codename`` parameter. Other
+  a distribution but can be overridden by the ``Codename`` parameter. Other
   options should be specified as defined in the manual page and will be added
   to the configuration as-is. There are special parameters ignored by the
   configuration template, used to manage the configuration entry itself:

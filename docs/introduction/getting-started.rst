@@ -154,8 +154,8 @@ It's customary to specify this variable directly in the
 .. code-block:: none
 
    [debops_all_hosts]
-   server    ansible_host=server.example.com ansible_user=ansible-admin
-   server    system_users__self_name=ansible-admin
+   server    ansible_host=server.example.com ansible_user=ansible
+   server    system_users__self_name=ansible
 
 On specific platforms you can set this variable to an automatically created
 username to make the remote host administration easier:
@@ -322,7 +322,7 @@ variable from the command line using Ansible "extra vars":
    alice@laptop:~/myproject$ debops run bootstrap -l server -e 'ansible_user=root' -k
 
 This command will execute the `DebOps bootstrap playbook`_ and use it to
-install a base set of packages needed by Ansible like ``python`` and
+install a base set of packages needed by Ansible like ``python3`` and
 :command:`sudo`, prepare a new administrator account named after your system
 user (``alice`` in our example) and allow that account full access to the
 ``root`` account using :command:`sudo`. Your SSH keys will be installed on

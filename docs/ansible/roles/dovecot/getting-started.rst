@@ -54,7 +54,7 @@ List of other useful resources related to the ``debops.dovecot`` Ansible role:
 
 .. __: https://www.dovecot.org/
 .. __: https://doc.dovecot.org/
- 
+
 
 Example playbook
 ----------------
@@ -83,7 +83,7 @@ Available role tags:
 ``role::dovecot:conf``
   Main configuration tag, should be used in the playbook to execute all of
   the role tasks relates to configuration creation.
-``role::covecot:conf:sql``
+``role::dovecot:conf:sql``
   `SQL` specific configuration subtag.
 ``role::dovecot:conf:ldap``
   `LDAP` specific configuration subtag.

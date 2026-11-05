@@ -49,21 +49,20 @@
     mode: '0755'
 
 - name: Install NPM packages
-  npm:
-    name:           '{{ item.name           | d(item) }}'
-    state:          '{{ item.state          | d("present") }}'
-    global:         '{{ (item.global        | d(True)) | bool }}'
-    production:     '{{ (item.production    | d(nodejs__npm_production_mode)) | bool }}'
-    version:        '{{ item.version        | d(omit) }}'
-    registry:       '{{ item.registry       | d(omit) }}'
-    executable:     '{{ item.executable     | d(omit) }}'
+  community.general.npm:
+    name:           '{{ item.name | d(item) }}'
+    state:          '{{ item.state | d("present") }}'
+    global:         '{{ (item.global | d(True)) | bool }}'
+    production:     '{{ (item.production | d(nodejs__npm_production_mode)) | bool }}'
+    version:        '{{ item.version | d(omit) }}'
+    registry:       '{{ item.registry | d(omit) }}'
+    executable:     '{{ item.executable | d(omit) }}'
     ignore_scripts: '{{ item.ignore_scripts | d(omit) }}'
-    path:           '{{ item.path           | d(omit) }}'
-  with_flattened:
-    - '{{ nodejs__npm_packages }}'
-    - '{{ nodejs__npm_group_packages }}'
-    - '{{ nodejs__npm_host_packages }}'
-    - '{{ nodejs__npm_dependent_packages }}'
+    path:           '{{ item.path | d(omit) }}'
+  loop: '{{ q("flattened", nodejs__npm_packages
+                           + nodejs__npm_group_packages
+                           + nodejs__npm_host_packages
+                           + nodejs__npm_dependent_packages) }}'
 
 - name: Make sure that Ansible local facts directory exists
   ansible.builtin.file:

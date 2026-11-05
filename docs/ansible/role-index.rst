@@ -43,6 +43,7 @@ etc.
 - :ref:`debops.librenms`
 - :ref:`debops.mailman`
 - :ref:`debops.minidlna`
+- :ref:`debops.miniflux`
 - :ref:`debops.netbox`
 - :ref:`debops.owncloud`
 - :ref:`debops.phpipam`
@@ -53,7 +54,6 @@ etc.
 - ``debops-contrib.foodsoft``
 - ``debops-contrib.homeassistant``
 - ``debops-contrib.kodi``
-- ``debops-contrib.volkszaehler``
 
 
 Application environments
@@ -89,8 +89,8 @@ are not accessed directly by end users.
 
 - :ref:`debops.ansible`
 - :ref:`debops.apt_cacher_ng`
+- :ref:`debops.apt_mirror`
 - :ref:`debops.controller` - install DebOps on other hosts
-- :ref:`debops.debops_api`
 - :ref:`debops.gitlab_runner`
 - :ref:`debops.fcgiwrap`
 - :ref:`debops.freeradius`
@@ -110,7 +110,6 @@ are not accessed directly by end users.
 - :ref:`debops.tinyproxy`
 - :ref:`debops.reprepro`
 - ``debops.sks``
-- ``debops-contrib.bitcoind``
 - ``debops-contrib.x2go_server``
 
 
@@ -129,12 +128,14 @@ Databases
 - :ref:`debops.ldap`
 - :ref:`debops.mariadb`
 - :ref:`debops.mariadb_server`
+- :ref:`debops.pgbadger`
 - :ref:`debops.postgresql`
 - :ref:`debops.postgresql_server`
 - :ref:`debops.redis_server`
 - :ref:`debops.redis_sentinel`
 - :ref:`debops.slapd`
 - :ref:`debops.influxdb`
+- :ref:`debops.influxdb2`
 - :ref:`debops.influxdb_server`
 - ``debops.phpmyadmin``
 
@@ -156,10 +157,12 @@ Domain Name System
 It's always DNS.
 
 - :ref:`debops.avahi`
+- :ref:`debops.bind`
 - :ref:`debops.dnsmasq`
 - :ref:`debops.netbase`
 - :ref:`debops.pdns`
 - :ref:`debops.resolvconf`
+- :ref:`debops.resolved`
 - :ref:`debops.unbound`
 
 
@@ -198,11 +201,12 @@ other hosts.
 Host provisioning
 -----------------
 
+- :ref:`debops.dropbear_initramfs`
 - :ref:`debops.grub`
 - :ref:`debops.ipxe`
+- :ref:`debops.netboot_assistant`
 - :ref:`debops.preseed`
 - :ref:`debops.tftpd`
-- ``debops-contrib.dropbear_initramfs``
 
 
 Kernel
@@ -221,6 +225,7 @@ Logging
 - :ref:`debops.journald`
 - :ref:`debops.kibana`
 - :ref:`debops.logrotate`
+- :ref:`debops.opensearch`
 - :ref:`debops.rsyslog`
 
 
@@ -273,8 +278,10 @@ Networking
 - :ref:`debops.keepalived`
 - :ref:`debops.lldpd`
 - :ref:`debops.netbase`
+- :ref:`debops.networkd`
 - :ref:`debops.radvd`
 - :ref:`debops.resolvconf`
+- :ref:`debops.resolved`
 - :ref:`debops.stunnel`
 - :ref:`debops.tinc`
 - :ref:`debops.unbound`
@@ -292,8 +299,10 @@ packages.
 - :ref:`debops.apt_listchanges`
 - :ref:`debops.apt_install`
 - :ref:`debops.apt_mark`
+- :ref:`debops.apt_mirror`
 - :ref:`debops.apt_preferences`
 - :ref:`debops.apt_proxy`
+- :ref:`debops.debconf`
 - :ref:`debops.debops_legacy`
 - :ref:`debops.extrepo`
 - :ref:`debops.keyring`
@@ -304,6 +313,7 @@ packages.
 Security
 --------
 
+- :ref:`debops.apparmor`
 - :ref:`debops.auth`
 - :ref:`debops.authorized_keys`
 - :ref:`debops.fail2ban`
@@ -318,7 +328,6 @@ Security
 - :ref:`debops.system_groups`
 - :ref:`debops.system_users`
 - :ref:`debops.tcpwrappers`
-- ``debops-contrib.apparmor``
 - ``debops-contrib.firejail``
 
 
@@ -341,6 +350,7 @@ System configuration
 - :ref:`debops.machine`
 - :ref:`debops.mount`
 - :ref:`debops.netbase`
+- :ref:`debops.nixos`
 - :ref:`debops.nslcd`
 - :ref:`debops.nsswitch`
 - :ref:`debops.ntp`
@@ -355,6 +365,8 @@ System configuration
 - :ref:`debops.sysnews`
 - :ref:`debops.system_groups`
 - :ref:`debops.system_users`
+- :ref:`debops.systemd`
+- :ref:`debops.timesyncd`
 - :ref:`debops.tzdata`
 - :ref:`debops.users`
 - :ref:`debops.yadm`
@@ -379,6 +391,7 @@ Virtualization
 - :ref:`debops.docker_gen`
 - :ref:`debops.docker_registry`
 - :ref:`debops.docker_server`
+- :ref:`debops.docker_service`
 - :ref:`debops.libvirt`
 - :ref:`debops.libvirtd`
 - :ref:`debops.libvirtd_qemu`

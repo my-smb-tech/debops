@@ -32,10 +32,10 @@
     state: 'present'
   loop: '{{ lookup("template", "lookup/authorized_keys__identities.j2") | from_yaml }}'
   loop_control:
-    label: '{{ {"identity": item.identity, "group": item.group} }}'
-  when: authorized_keys__enabled | bool and item.group | d() and
-        item.state | d('present') not in [ 'absent', 'ignore', 'init' ] and
-        item.file_state | d('present') not in [ 'absent', 'ignore', 'init' ]
+    label: '{{ {"identity": item.identity, "group": item.group | d()} }}'
+  when: authorized_keys__enabled | bool and item.group is defined and item.group is truthy and
+        item.state | d('present') not in ['absent', 'ignore', 'init'] and
+        item.file_state | d('present') not in ['absent', 'ignore', 'init']
 
 - name: Get list of all groups
   ansible.builtin.getent:
@@ -54,11 +54,12 @@
     key:         '{{ item.key }}'
     user:        '{{ item.user if (item.home | d()) | bool else "root" }}'
     manage_dir:  '{{ item.manage_dir }}'
-    state:       '{{ item.state       | d("present") }}'
+    state:       '{{ item.state | d("present") }}'
     key_options: '{{ item.key_options | d(omit) }}'
-    comment:     '{{ item.comment     | d(omit) }}'
-    path:        '{{ item.path        | d(omit) }}'
-    exclusive:   '{{ item.exclusive   | d(omit) }}'
+    comment:     '{{ item.comment | d(omit) }}'
+    path:        '{{ item.path | d(omit) }}'
+    exclusive:   '{{ item.exclusive | d(omit) }}'
+    follow:      '{{ item.follow | d(omit) }}'
   loop: '{{ lookup("template", "lookup/authorized_keys__identities.j2") | from_yaml }}'
   loop_control:
     label: '{{ {"identity": item.identity,
@@ -94,9 +95,9 @@
                           else (getent_passwd[item.owner | d("root")][2] | d({})
                                 if (item.owner | d("root") in getent_passwd | d({}))
                                 else "root")),
-                "path": item.path} }}'
-  when: authorized_keys__enabled | bool and item.path | d() and not item.manage_dir | bool and
-        item.state | d('present') not in [ 'absent', 'ignore', 'init' ] and not ansible_check_mode
+                "path": item.path | d()} }}'
+  when: authorized_keys__enabled | bool and item.path is defined and item.path is truthy and not item.manage_dir | bool and
+        item.state | d('present') not in ['absent', 'ignore', 'init'] and not ansible_check_mode
 
 - name: Make sure that Ansible local facts directory exists
   ansible.builtin.file:

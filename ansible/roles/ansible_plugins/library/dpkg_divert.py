@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # Copyright (c) 2017-2018, Yann Amar <quidame@poivron.org>
 # Copyright (c) 2019,      Maciej Delmanowski <drybjed@gmail.com>
 # Copyright (c) 2019,      DebOps https://debops.org/

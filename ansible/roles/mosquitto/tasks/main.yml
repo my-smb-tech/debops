@@ -33,7 +33,7 @@
   with_items: '{{ mosquitto__pip_packages }}'
   register: mosquitto__register_pip_install
   until: mosquitto__register_pip_install is succeeded
-  when: mosquitto__pip_packages | d()
+  when: mosquitto__pip_packages is truthy
 
 - name: Check the installed Mosquitto version
   ansible.builtin.shell: set -o nounset -o pipefail -o errexit &&
@@ -55,7 +55,7 @@
   ansible.builtin.user:
     name: '{{ mosquitto__user }}'
     group: '{{ mosquitto__group }}'
-    groups: '{{ ([ mosquitto__append_groups ]
+    groups: '{{ ([mosquitto__append_groups]
                  if mosquitto__append_groups is string
                  else mosquitto__append_groups) | join(",") }}'
     append: True
@@ -81,10 +81,11 @@
 
 - name: Remove user/password entries
   ansible.builtin.command: 'mosquitto_passwd -D {{ mosquitto__password_file }} {{ item.name | d(item) }}'
-  with_flattened:
-    - '{{ mosquitto__auth_users }}'
-    - '{{ mosquitto__auth_group_users }}'
-    - '{{ mosquitto__auth_host_users }}'
+  loop: '{{ q("flattened", mosquitto__auth_users
+                           + mosquitto__auth_group_users
+                           + mosquitto__auth_host_users) }}'
+  register: mosquitto__register_passwd_remove
+  changed_when: mosquitto__register_passwd_remove.changed | bool
   when: (mosquitto__password | bool and item.state | d('present') == 'absent' and
          (item.name | d(item) in mosquitto__register_passwd.stdout_lines) and
          mosquitto__version is version_compare('1.4.0', '>='))
@@ -97,10 +98,11 @@
     MOSQUITTO_PASSWORD: '{{ item.password
                             | d(lookup("password", mosquitto__password_secret_path + "/" + item.name | d(item))) }}'
   ansible.builtin.command: 'mosquitto_passwd -b {{ mosquitto__password_file }} {{ item.name | d(item) }} ${MOSQUITTO_PASSWORD}'
-  with_flattened:
-    - '{{ mosquitto__auth_users }}'
-    - '{{ mosquitto__auth_group_users }}'
-    - '{{ mosquitto__auth_host_users }}'
+  loop: '{{ q("flattened", mosquitto__auth_users
+                           + mosquitto__auth_group_users
+                           + mosquitto__auth_host_users) }}'
+  register: mosquitto__register_passwd_create
+  changed_when: mosquitto__register_passwd_create.changed | bool
   when: (mosquitto__password | bool and item.state | d('present') != 'absent' and
          (item.name | d(item) not in mosquitto__register_passwd.stdout_lines) and
          mosquitto__version is version_compare('1.4.0', '>='))

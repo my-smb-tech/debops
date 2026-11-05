@@ -66,10 +66,9 @@
 - name: Get commit hash of target checkout
   environment:
     GIT_WORK_TREE: '{{ phpipam__git_checkout }}'
-  ansible.builtin.command: git rev-parse {{ phpipam__git_version }}
+  ansible.builtin.command: git rev-parse {{ phpipam__git_version }}  # noqa command-instead-of-module
   args:
     chdir: '{{ phpipam__git_dest }}'
-    warn: False
   become: True
   become_user: '{{ phpipam__user }}'
   register: phpipam__register_target_branch
@@ -78,13 +77,13 @@
 - name: Checkout phpIPAM
   environment:
     GIT_WORK_TREE: '{{ phpipam__git_checkout }}'
-  ansible.builtin.command: git checkout -f {{ phpipam__git_version }}
+  ansible.builtin.command: git checkout -f {{ phpipam__git_version }}  # noqa command-instead-of-module
   args:
     chdir: '{{ phpipam__git_dest }}'
-    warn: False
   become: True
   become_user: '{{ phpipam__user }}'
   register: phpipam__register_checkout
+  changed_when: phpipam__register_checkout.changed | bool
   when: (phpipam__register_source.before is undefined or
          (phpipam__register_source.before is defined and
           phpipam__register_target_branch.stdout is defined and
@@ -104,17 +103,19 @@
   register: phpipam__register_mysql
 
 - name: Create phpIPAM database in local MySQL instance
-  mysql_db:
+  ansible.mysql.mysql_db:
     name: '{{ phpipam__database_name }}'
     state: 'present'
+    login_unix_socket: '/run/mysqld/mysqld.sock'
   when: phpipam__database_host == 'localhost' and phpipam__register_mysql.stat.exists
   register: phpipam__register_database_status
 
 - name: Import initial database schema
-  mysql_db:  # noqa no-handler
+  ansible.mysql.mysql_db:  # noqa no-handler
     name: '{{ phpipam__database_name }}'
     state: 'import'
     target: '{{ phpipam__database_schema }}'
+    login_unix_socket: '/run/mysqld/mysqld.sock'
   when: (phpipam__database_host == 'localhost' and
          (phpipam__register_database_status is defined and phpipam__register_database_status is changed) and
          (phpipam__register_configuration is defined and not phpipam__register_configuration.stat.exists))

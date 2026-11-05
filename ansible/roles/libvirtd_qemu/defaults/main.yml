@@ -52,10 +52,11 @@ libvirtd_qemu__base_packages_map:
 #
 # List of QEMU KVM packages to install. They will be installed on all hosts
 # apart from KVM guests, to not create redundant support.
-libvirtd_qemu__kvm_packages:
-  - 'qemu-system-x86'
-  - 'qemu-kvm'
-  - 'qemu-utils'
+libvirtd_qemu__kvm_packages: '{{ ["qemu-system-x86", "qemu-utils"]
+                                 + ["qemu-kvm"]
+                                   if ansible_distribution_release in
+                                        ["stretch", "buster", "bionic", "focal"]
+                                   else [] }}'
 
                                                                    # ]]]
 # .. envvar:: libvirtd_qemu__packages [[[
@@ -116,7 +117,7 @@ libvirtd_qemu__remote_display_allow: []
 # .. envvar:: libvirtd_qemu__remote_display_ports [[[
 #
 # List of TCP ports which should be opened in the firewall to allow access to
-# the VNC/SPICE services. You can specify specifc ports or port ranges
+# the VNC/SPICE services. You can specify specific ports or port ranges
 # separated by the ``:`` character. Only the hosts specified by the
 # :envvar:`libvirtd_qemu__remote_display_allow` variable will have access
 # through these ports.
@@ -909,8 +910,9 @@ libvirtd_qemu__original_configuration:
       Note, that job lock is per domain.
     value: 0
     section: 'proc'
+    anchor_to: 'keepalive_count'
     state: 'comment'
-    weight: 13  # ]]]
+    weight: -1  # ]]]
 
   - name: 'keepalive_interval'  # [[[
     comment: |

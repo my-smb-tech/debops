@@ -78,7 +78,7 @@ the following content:
            rbl = "rbl.example.net";
            checks = ["from"];
        }
-   } 
+   }
 
 
 .. _rspamd__ref_configuration_syntax:
@@ -108,10 +108,12 @@ the following parameters:
   be removed.
 
 ``weight``
-  Optional. A positive or negative number which can be used to affect the order
-  of files to be generated. Positive numbers add more "weight" to the section
-  making it appear "lower" in the list; negative numbers substract the "weight"
-  and therefore move the file up in the list.
+  Optional. A positive or negative number which selects the placement zone of
+  a configuration section in the generated configuration: negative values move
+  it to the top, ``0`` (the default) keeps it in the middle in source order,
+  and positive values move it to the bottom. The magnitude of the value does
+  not matter; use ``anchor_to`` for ordering relative to a specific section.
+  See :ref:`universal_configuration_advanced_weight` for details.
 
 ``options``
   Required. A list of :command:`rspamd` configuration options for a given
@@ -269,7 +271,7 @@ The key file needs to be stored on the :command:`rspamd` host, by default at
 :file:`/etc/rspamd/dkim_dns_key` (preferably with ``0640`` permissions and
 ``root:_rspamd`` ownership). This can be automated by transferring the key
 file to the Ansible controller and putting it in the appropriate override
-directory (e.g. :file:`project-dir/ansible/overrides/files/etc/rspamd/dkim_dns_key` as 
+directory (e.g. :file:`project-dir/ansible/overrides/files/etc/rspamd/dkim_dns_key` as
 explained below in the :ref:`rspamd__ref_dkim_override` section).
 
 Once the keyfile has been prepared, check the values of ``nsupdate_*`` in the

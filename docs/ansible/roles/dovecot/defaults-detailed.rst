@@ -132,7 +132,7 @@ SQL User Databases
 Users can be stored in an external ``SQL`` database (see
 :ref:`dovecot__ref_user_accounts` above). In order to do so, a database-driver
 specific connection string needs to be defined in
-:envvar:`dovecot__sql_connect`. The parmeters are generally provided as a
+:envvar:`dovecot__sql_connect`. The parameters are generally provided as a
 space-delimited string of ``parameter=value`` pairs (which means that it is not
 possible to use spaces in parameters), with the possible parameters defined by
 the used database type:
@@ -251,10 +251,10 @@ Autosubscribe users to the ``Junk`` mailbox:
 .. code-block:: yaml
 
   dovecot__group_configuration:
-  
+
     - section: 'mailbox_namespaces'
       options:
-  
+
         - name: 'namespace inbox'
           options:
 
@@ -269,10 +269,10 @@ Rename the ``Junk`` mailbox to ``INBOX.Spam``:
 .. code-block:: yaml
 
   dovecot__group_configuration:
-  
+
     - section: 'mailbox_namespaces'
       options:
-  
+
         - name: 'namespace inbox'
           options:
 
@@ -315,11 +315,12 @@ the following parameters:
   but commented out.
 
 ``weight``
-  Optional. A positive or negative number which can be used to affect the order
-  of sections in the generated configuration file. Positive numbers add more
-  "weight" to the section making it appear "lower" in the file; negative
-  numbers substract the "weight" and therefore move the section upper in the
-  file.
+  Optional. A positive or negative number which selects the placement zone of
+  a section in the generated configuration file: negative values move it to the
+  top, ``0`` (the default) keeps it in the middle in source order, and positive
+  values move it to the bottom. The magnitude of the value does not matter; use
+  ``anchor_to`` for ordering relative to a specific section. See
+  :ref:`universal_configuration_advanced_weight` for details.
 
 ``comment``
   Optional. This parameter can be used to provide a short description

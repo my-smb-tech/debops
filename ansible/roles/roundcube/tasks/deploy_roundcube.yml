@@ -33,7 +33,7 @@
     mode: '{{ item.mode | d("0755") }}'
   loop:
     - { path: '{{ roundcube__src }}' }
-    - { path: '{{ roundcube__git_dir  | dirname }}', mode: "0750" }
+    - { path: '{{ roundcube__git_dir | dirname }}', mode: "0750" }
     - { path: '{{ roundcube__git_dest | dirname }}' }
 
 - name: Clone Roundcube source from upstream repository
@@ -62,7 +62,7 @@
   ansible.builtin.slurp:  # noqa no-handler
     src: '{{ roundcube__git_dest + "/composer.json" }}'
   register: roundcube__register_composer_installed
-  when: (ansible_local | d() and ansible_local.roundcube | d() and
+  when: (ansible_local is defined and ansible_local.roundcube is defined and
          (ansible_local.roundcube.installed | d()) | bool and
         roundcube__register_git is changed)
 
@@ -78,7 +78,7 @@
 # ---- Post deployment ----
 
 - name: Install or upgrade PHP packages via Composer
-  composer:  # noqa no-handler
+  community.general.composer:  # noqa no-handler
     command: '{{ "upgrade"
                  if (ansible_local | d() and ansible_local.roundcube | d() and
                      (ansible_local.roundcube.installed | d()) | bool)
@@ -92,7 +92,7 @@
   when: roundcube__register_git is changed
 
 - name: Install Roundcube plugins via Composer
-  composer:
+  community.general.composer:  # noqa jinja[spacing]
     command: 'require'
     arguments: '{{ item }}'
     working_dir: '{{ roundcube__git_dest }}'

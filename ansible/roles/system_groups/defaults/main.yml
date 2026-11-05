@@ -29,8 +29,7 @@ system_groups__enabled: True
 #
 # Enable or disable support for :file:`/etc/sudoers.d/` configuration.
 system_groups__sudo_enabled: '{{ True
-                                 if (ansible_local | d() and ansible_local.sudo | d() and
-                                     (ansible_local.sudo.installed | d() | bool))
+                                 if (ansible_local.sudo.installed | d() | bool)
                                  else False }}'
 
                                                                    # ]]]
@@ -74,8 +73,7 @@ system_groups__prefix: '{{ ansible_local.system_groups.local_prefix
                                ansible_local.system_groups.local_prefix is defined)
                            else ("_"
                                  if ("debops_service_ldap" in group_names or
-                                     (ansible_local | d() and ansible_local.ldap | d() and
-                                      (ansible_local.ldap.posix_enabled | d()) | bool))
+                                     (ansible_local.ldap.posix_enabled | d() | bool))
                                  else "") }}'
 
                                                                    # ]]]
@@ -83,7 +81,7 @@ system_groups__prefix: '{{ ansible_local.system_groups.local_prefix
 #
 # Number of the CPU cores available on the ansible controller. This variable is
 # used to throttle the number of parallel tasks on one specific CPU intensive
-# task and helps to reduces memory consumption on big enviornments (> 100).
+# task and helps to reduces memory consumption on big environments (> 100).
 system_groups__throttle: '8'
                                                                    # ]]]
                                                                    # ]]]
@@ -109,8 +107,11 @@ system_groups__default_list:
   - name: '{{ system_groups__prefix }}admins'
     sudoers_filename: 'system_groups-admins'
     sudoers: |
+      {% if not (ansible_distribution == "Ubuntu"
+                 and ansible_facts.distribution_major_version is version_compare('26', '>=')) %}
       # This might be required to allow Ansible pipelining connections
       Defaults: %{{ system_groups__prefix }}admins !requiretty
+      {% endif %}
 
       # This variable is used to configure access by Ansible Controller hosts
       Defaults: %{{ system_groups__prefix }}admins env_check += "SSH_CLIENT"

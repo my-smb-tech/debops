@@ -210,9 +210,15 @@ Common webserver options
   List of files that will be included at the end of the server
   configuration using `include`.
 
+``toplevel_options``
+  Optional, String or YAML text block with top-level options (i.e. before any
+  ``server`` blocks in the generated configuration) for this server
+  configuration. Semicolons at the end of each line are required.
+
 ``options``
-  Optional, String or YAML text block with options for this server configuration.
-  Semicolons at the end of each line are required.
+  Optional, String or YAML text block with options (included inside the
+  relevant ``server`` block) for this server configuration. Semicolons at the
+  end of each line are required.
 
 Redirects
 ~~~~~~~~~
@@ -349,6 +355,12 @@ HTTPS and TLS
   intermediate+root CA certificate is required for this.
   FIXME: Rename to ocsp_stapling_verify
 
+``nginx_ocsp_resolvers``
+  Optional, string.  List of DNS servers used to for resolving. Among other things
+  used to resolve OCSP stapling but in general all dns queries (e.g. for proxy_path).
+  If it's empty, nginx role will try to use the nameservers from /etc/resolv.conf.
+  Currently only the first nameserver is used
+
 ``hsts_enabled``
   Optional, boolean. Defaults to ``True``. If this is set to ``True`` and HTTPS
   is enabled for this item, the `HTTP Strict Transport Security`_ header is set
@@ -427,8 +439,8 @@ Locations
        '~ ^/doc$': [ 'all' ]
 
 ``location_referers``
-  Optional. Dict with lists of valid referers accepted for a given
-  location, all other referers will be blocked by nginx. Each location
+  Optional. Dict with lists of valid referrers accepted for a given
+  location, all other referrers will be blocked by nginx. Each location
   needs to have corresponding entry in ``location`` dict. Examples:
 
   .. code-block:: yaml

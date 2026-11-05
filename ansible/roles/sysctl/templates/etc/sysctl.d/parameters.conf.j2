@@ -11,7 +11,7 @@
 {%   elif not value | bool and value is not iterable %}
 {%     if value is not none %}
 {%       if value | int or value | string == '0' %}
-{{ value -}}
+{{ value | string -}}
 {%       else %}
 {{ '0' -}}
 {%       endif %}
@@ -51,7 +51,12 @@
 {%       set commented_entry = '#' %}
 # Read-only parameter.
 {%     endif %}
-{{ '{}{} = {}'.format(commented_entry, element.name, parse_value(element.value)) }}
+{%     set param_name = (('-' if (element.softfail | d(False) | bool) else '')) ~ element.name %}
+{%     if element.value is defined %}
+{{ '{}{} = {}'.format(commented_entry, param_name, parse_value(element.value)) }}
+{%     else %}
+{{ '{}{}'.format(commented_entry, param_name) }}
+{%     endif %}
 {%     if element.comment | d() and not loop.last %}
 
 {%     endif %}

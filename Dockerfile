@@ -1,7 +1,7 @@
 # Set up an Ansible Controller with DebOps support as a Docker container
 #
-# Copyright (C) 2017-2019 Maciej Delmanowski <drybjed@gmail.com>
-# Copyright (C) 2017-2019 DebOps <https://debops.org/>
+# Copyright (C) 2017-2026 Maciej Delmanowski <drybjed@gmail.com>
+# Copyright (C) 2017-2026 DebOps <https://debops.org/>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
@@ -15,9 +15,15 @@
 #
 #     cd src/controller
 #     debops run common --diff
+#
+# To skip building the manual pages (faster, useful for testing):
+#
+#     docker build --build-arg WITH_MANPAGES=0 -t debops .
 
 
-FROM debian:bullseye-slim AS builder
+FROM debian:trixie-slim AS builder
+
+ARG WITH_MANPAGES=1
 
 LABEL maintainer="Maciej Delmanowski <drybjed@gmail.com>" \
       project="DebOps" homepage="https://debops.org/"
@@ -29,18 +35,25 @@ RUN apt-get -q update \
        python3-setuptools \
        python3-toml \
        python3-wheel \
-       python3-pypandoc \
-       python3-sphinx \
-       pandoc \
+       python3-yaml \
        make \
-       git
+       git \
+    && if [ "${WITH_MANPAGES}" = "1" ] ; then \
+         DEBIAN_FRONTEND=noninteractive apt-get \
+           --no-install-recommends -yq install \
+           python3-pypandoc \
+           python3-sphinx \
+           python3-sphinx-rtd-theme \
+           pandoc ; \
+       fi \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . /root/src/debops
 WORKDIR /root/src/debops
-RUN make man wheel-quiet \
+RUN if [ "${WITH_MANPAGES}" = "1" ] ; then make man wheel-quiet ; else make wheel-quiet ; fi \
     && cp lib/docker/docker-entrypoint /usr/local/bin/
 
-FROM debian:bullseye-slim
+FROM debian:trixie-slim
 
 LABEL maintainer="Maciej Delmanowski <drybjed@gmail.com>" \
       project="DebOps" homepage="https://debops.org/"
@@ -56,7 +69,6 @@ RUN apt-get -q update \
        python3-cryptography \
        python3-distro \
        python3-dnspython \
-       python3-future \
        python3-ldap \
        python3-netaddr \
        python3-pip \
@@ -70,14 +82,14 @@ RUN apt-get -q update \
        make \
        git \
        man-db \
-    && pip3 install ansible \
+    && pip3 install --no-cache-dir --break-system-packages ansible \
     && echo "Cleaning up cache directories..." \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb /root/.cache/*
 
 COPY --from=builder /root/src/debops/dist /root/src/debops/dist
 COPY --from=builder /usr/local/bin/docker-entrypoint /usr/local/bin/docker-entrypoint
 
-RUN pip3 install /root/src/debops/dist/debops-*.whl \
+RUN pip3 install --no-cache-dir --break-system-packages /root/src/debops/dist/pypi/debops-*.whl \
     && chmod +x /usr/local/bin/docker-entrypoint \
     && rm -rf /root/src /root/.cache/*
 
@@ -93,7 +105,7 @@ WORKDIR /home/ansible
 
 # Docker does not set expected environment variables by default
 # Ref: https://stackoverflow.com/questions/54411218/
-ENV USER ansible
+ENV USER=ansible
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint"]
 CMD ["/bin/bash"]

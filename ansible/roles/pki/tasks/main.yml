@@ -85,7 +85,7 @@
   delegate_to: 'localhost'
   become: False
   run_once: True
-  when: pki_authorities | d() and pki_dependent_authorities | d()
+  when: pki_authorities is truthy and pki_dependent_authorities is truthy
 # .. ]]]
 
 # Create scripts and library/secrets directory [[[
@@ -106,7 +106,7 @@
   become: False
   delegate_to: 'localhost'
   run_once: True
-  when: (pki_authorities or pki_dependent_authorities)
+  when: (pki_authorities is truthy or pki_dependent_authorities is truthy)
 
 - name: Install remote PKI scripts
   ansible.builtin.copy:
@@ -177,6 +177,7 @@
     --acme-ca-api "{{ item.acme_ca_api | d(pki_acme_ca_api_map[item.acme_ca | d(pki_acme_ca)]) }}"
     --acme-type "{{ item.type | d(pki_acme_type) }}"
     --acme-contacts "{{ item.acme_contacts | d(pki_acme_contacts) | join(',') }}"
+    --acme-domains "{{ item.acme_domains | d([]) | join('/') }}"
     --acme-default-subdomains "{{ (item.acme_default_subdomains | d(pki_acme_default_subdomains)) | join('/') }}"
     --acme-challenge-dir "{{ item.acme_challenge_dir | d(pki_acme_challenge_dir) }}"
     --default-domain "{{ item.default_domain | d(pki_default_domain) }}"
@@ -186,19 +187,32 @@
     --selfsigned-sign-days "{{ item.selfsigned_sign_days | d('365') }}"
   args:
     creates: '{{ pki_root + "/realms/" + item.name + "/config/realm.conf" }}'
-  with_flattened:
-    - '{{ pki_realms }}'
-    - '{{ pki_group_realms }}'
-    - '{{ pki_host_realms }}'
-    - '{{ pki_default_realms }}'
-    - '{{ pki_dependent_realms }}'
+  loop: '{{ q("flattened", pki_realms
+                           + pki_group_realms
+                           + pki_host_realms
+                           + pki_default_realms
+                           + pki_dependent_realms) }}'
+  when: (pki_enabled | bool and item.name is defined and
+         (item.enabled | d(True) | bool) and
+         (item.when | d(True) | bool))
+
+- name: Configure PKI realm environment
+  ansible.builtin.template:
+    src: 'etc/pki/realms/realm/config/environment.j2'
+    dest: '{{ pki_root + "/realms/" + item.name + "/config/environment" }}'
+    mode: '0644'
+  loop: '{{ q("flattened", pki_realms
+                           + pki_group_realms
+                           + pki_host_realms
+                           + pki_default_realms
+                           + pki_dependent_realms) }}'
   when: (pki_enabled | bool and item.name is defined and
          (item.enabled | d(True) | bool) and
          (item.when | d(True) | bool))
 # ]]]
 
 # Download files [[[
-- name: Download private files to remove hosts
+- name: Download private files to remote hosts
   when: pki_download_extra | bool
   block:
     - name: Download custom private files
@@ -212,10 +226,9 @@
         directory_mode: '{{ item.directory_mode | d(omit) }}'
         follow: '{{ item.follow | d(omit) }}'
         force: '{{ item.force | d(omit) }}'
-      with_flattened:
-        - '{{ pki_private_files }}'
-        - '{{ pki_group_private_files }}'
-        - '{{ pki_host_private_files }}'
+      loop: '{{ q("flattened", pki_private_files
+                               + pki_group_private_files
+                               + pki_host_private_files) }}'
       when: (pki_enabled | bool and (item.src is defined or item.content is defined) and
              item.dest is defined)
 
@@ -281,12 +294,11 @@
            --acme-alt-names "{{ item.acme_alt_names | d([]) | join('|') }}"
   args:
     creates: '/etc/pki/realms/{{ item.name }}/default.key'
-  with_flattened:
-    - '{{ pki_realms }}'
-    - '{{ pki_group_realms }}'
-    - '{{ pki_host_realms }}'
-    - '{{ pki_default_realms }}'
-    - '{{ pki_dependent_realms }}'
+  loop: '{{ q("flattened", pki_realms
+                           + pki_group_realms
+                           + pki_host_realms
+                           + pki_default_realms
+                           + pki_dependent_realms) }}'
   when: (pki_enabled | bool and item.name is defined and
          (item.enabled | d(True) | bool) and
          (item.when | d(True) | bool))
@@ -297,12 +309,11 @@
   environment:
     PKI_SESSION_TOKEN: '{{ pki_fact_session_token }}'
   ansible.builtin.command: '"{{ pki_fact_lib_path }}/pki-realm" run -n "{{ item.name }}"'
-  with_flattened:
-    - '{{ pki_realms }}'
-    - '{{ pki_group_realms }}'
-    - '{{ pki_host_realms }}'
-    - '{{ pki_default_realms }}'
-    - '{{ pki_dependent_realms }}'
+  loop: '{{ q("flattened", pki_realms
+                           + pki_group_realms
+                           + pki_host_realms
+                           + pki_default_realms
+                           + pki_dependent_realms) }}'
   changed_when: False
   when: (pki_enabled | bool and item.name is defined and
          (item.enabled | d(True) | bool) and
@@ -316,12 +327,11 @@
     dest: '{{ secret + "/pki/requests/" + (item.authority | d(pki_default_authority)) +
               "/" + inventory_hostname + "/" + item.name + "/request.pem" }}'
     flat: True
-  with_flattened:
-    - '{{ pki_realms }}'
-    - '{{ pki_group_realms }}'
-    - '{{ pki_host_realms }}'
-    - '{{ pki_default_realms }}'
-    - '{{ pki_dependent_realms }}'
+  loop: '{{ q("flattened", pki_realms
+                           + pki_group_realms
+                           + pki_host_realms
+                           + pki_default_realms
+                           + pki_dependent_realms) }}'
   when: (pki_enabled | bool and item.name is defined and
          ((item.internal | d(True) | bool) and pki_internal | bool) and
          (item.enabled | d(True) | bool) and
@@ -346,8 +356,7 @@
   delegate_to: 'localhost'
   become: False
   run_once: True
-  with_flattened:
-    - '{{ pki_authorities + pki_dependent_authorities }}'
+  loop: '{{ q("flattened", pki_authorities + pki_dependent_authorities) }}'
   when: (item.name is defined and (item.enabled | d(True) | bool))
 
 - name: Create PKI authorities
@@ -379,8 +388,7 @@
   delegate_to: 'localhost'
   become: False
   run_once: True
-  with_flattened:
-    - '{{ pki_authorities + pki_dependent_authorities }}'
+  loop: '{{ q("flattened", pki_authorities + pki_dependent_authorities) }}'
   when: (item.name is defined and (item.enabled | d(True) | bool))
 # ]]]
 
@@ -396,8 +404,8 @@
   register: pki_register_sign_by_host
   become: False
   run_once: True
-  when: (pki_authorities or pki_dependent_authorities)
-  changed_when: pki_register_sign_by_host.stdout | d()
+  when: (pki_authorities is truthy or pki_dependent_authorities is truthy)
+  changed_when: pki_register_sign_by_host.stdout is truthy
 # ]]]
 
 # Download files [[[
@@ -429,10 +437,9 @@
         directory_mode: '{{ item.directory_mode | d(omit) }}'
         follow: '{{ item.follow | d(omit) }}'
         force: '{{ item.force | d(omit) }}'
-      with_flattened:
-        - '{{ pki_public_files }}'
-        - '{{ pki_group_public_files }}'
-        - '{{ pki_host_public_files }}'
+      loop: '{{ q("flattened", pki_public_files
+                               + pki_group_public_files
+                               + pki_host_public_files) }}'
       when: (pki_enabled | bool and (item.src is defined or item.content is defined) and
              item.dest is defined)
 
@@ -505,12 +512,11 @@
   environment:
     PKI_SESSION_TOKEN: '{{ pki_fact_session_token }}'
   ansible.builtin.command: '"{{ pki_fact_lib_path }}/pki-realm" run -n "{{ item.name }}"'
-  with_flattened:
-    - '{{ pki_realms }}'
-    - '{{ pki_group_realms }}'
-    - '{{ pki_host_realms }}'
-    - '{{ pki_default_realms }}'
-    - '{{ pki_dependent_realms }}'
+  loop: '{{ q("flattened", pki_realms
+                           + pki_group_realms
+                           + pki_host_realms
+                           + pki_default_realms
+                           + pki_dependent_realms) }}'
   changed_when: False
   when: (pki_enabled | bool and item.name is defined and
          (item.enabled | d(True) | bool) and

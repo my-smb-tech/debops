@@ -14,15 +14,15 @@
   ansible.builtin.set_fact:
     snapshot_snapper__templates_combined: '{{
                 snapshot_snapper__templates
-      | combine(snapshot_snapper__host_group_templates, recursive=True )
-      | combine(snapshot_snapper__host_templates      , recursive=True ) }}'
+      | combine(snapshot_snapper__host_group_templates, recursive=True)
+      | combine(snapshot_snapper__host_templates, recursive=True) }}'
     snapshot_snapper__volumes_combined: '{{
-      (snapshot_snapper__volumes            | list) +
+      (snapshot_snapper__volumes | list) +
       (snapshot_snapper__host_group_volumes | list) +
-      (snapshot_snapper__host_volumes       | list) }}'
+      (snapshot_snapper__host_volumes | list) }}'
     snapshot_snapper__combined_packages: '{{
       (snapshot_snapper__base_packages | list) +
-      (snapshot_snapper__packages      | list) }}'
+      (snapshot_snapper__packages | list) }}'
   tags:
     - 'role::snapshot_snapper:reinit'
 # .. ]]]
@@ -40,10 +40,10 @@
 
 # Configure updatedb to exclude snapshots [[[
 - name: 'Divert original configuration under /etc'
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '{{ item }}'
   register: snapshot_snapper__updatedb_diverted_register
-  when: ansible_os_family in [ "Debian" ]
+  when: ansible_os_family in ["Debian"]
   loop: '{{ snapshot_snapper__divert_files | flatten }}'
 
 - name: Copy diverted configuration file to original location
@@ -56,7 +56,7 @@
     group: 'root'
     mode: '0644'
   when: snapshot_snapper__updatedb_diverted_register is changed
-  with_flattened: '{{ snapshot_snapper__divert_files }}'
+  loop: '{{ q("flattened", snapshot_snapper__divert_files) }}'
 
 - name: Check if snapshots are already excluded from updatedb
   ansible.builtin.command: grep PRUNENAMES=.*{{ snapshot_snapper__directory }}.* /etc/updatedb.conf

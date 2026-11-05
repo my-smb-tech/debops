@@ -6,9 +6,11 @@
 
 - name: Execute DH parameter hooks
   ansible.builtin.command: run-parts {{ dhparam__hook_path }}
+  register: dhparam__register_hooks
+  changed_when: dhparam__register_hooks.changed | bool
 
 - name: Regenerate DH parameters on first install
-  at:
+  ansible.posix.at:  # noqa jinja[spacing]
     command: |
       test -x {{ dhparam__generate_params }} \
       && (echo 'nice {{ dhparam__generate_params }} run' | batch > /dev/null 2>&1) || true

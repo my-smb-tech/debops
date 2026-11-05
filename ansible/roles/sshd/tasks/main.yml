@@ -19,23 +19,6 @@
 - name: Pre hooks
   ansible.builtin.include_tasks: '{{ lookup("debops.debops.task_src", "sshd/pre_main.yml") }}'
 
-- name: Make sure that Ansible local fact directory exists
-  ansible.builtin.file:
-    path: '/etc/ansible/facts.d'
-    state: 'directory'
-    mode: '0755'
-
-- name: Save Ansible local fact script
-  ansible.builtin.template:
-    src: 'etc/ansible/facts.d/sshd.fact.j2'
-    dest: '/etc/ansible/facts.d/sshd.fact'
-    mode: '0755'
-  notify: [ 'Refresh host facts' ]
-  tags: [ 'meta::facts' ]
-
-- name: Reload Ansible local facts
-  ansible.builtin.meta: 'flush_handlers'
-
 - name: Make sure that OpenSSH configuration directory exists
   ansible.builtin.file:
     path: '/etc/ssh'
@@ -77,8 +60,8 @@
       This file disables the ssh server.  It was created by debops.sshd.
       This file will be removed when configuration is successfully completed.
     mode: '0644'
-  when: (ansible_local | d() and ansible_local.sshd | d() and
-         not (ansible_local.sshd.installed | d()) | bool)
+  when: ansible_local is defined and ansible_local.sshd is defined and
+        not (ansible_local.sshd.installed | d()) | bool
 
   # In a case where the OpenSSH server is installed by the role but not started
   # due to conditions specified above, this task will ensure that the runtime
@@ -89,7 +72,6 @@
     path: '/run/sshd'
     state: 'directory'
     mode: '0755'
-  when: ansible_service_mgr != 'systemd'
 
 - name: Ensure OpenSSH support is installed
   ansible.builtin.apt:
@@ -110,31 +92,17 @@
 - name: Reload Ansible local facts
   ansible.builtin.meta: 'flush_handlers'
 
-- name: Check OpenSSH server version
-  environment:
-    LC_MESSAGES: 'C'
-  ansible.builtin.shell: 'set -o nounset -o pipefail -o errexit &&
-          dpkg-query -W -f="\${Version}\n" "openssh-server" | sed -re "s/^.*:([0-9]+\.[0-9]+).*/\1/"'
-  args:
-    executable: 'bash'
-  register: sshd__register_version
-  changed_when: False
-  check_mode: False
-  tags: [ 'role::sshd:config' ]
-
 - name: Ensure that Ed25519 host key is present
   ansible.builtin.command: ssh-keygen -q -t ed25519 -N "" -f ssh_host_ed25519_key
   args:
     chdir: '/etc/ssh'
     creates: '/etc/ssh/ssh_host_ed25519_key'
-  when: sshd__register_version.stdout | d() and
-        sshd__register_version.stdout is version_compare('6.5', '>=')
+  when: sshd__version is version('6.5', '>=')
   tags: [ 'role::sshd:config' ]
 
 - name: Configure authorized_keys lookup
   ansible.builtin.include_tasks: authorized_keys_lookup.yml
-  when: sshd__register_version.stdout | d() and
-        sshd__register_version.stdout is version_compare('6.2', '>=') and
+  when: sshd__version is version('6.2', '>=') and
         sshd__authorized_keys_lookup | bool
   tags: [ 'role::sshd:config' ]
 
@@ -160,8 +128,16 @@
     owner:    'root'
     group:    'root'
     mode:     '0644'
-  when: sshd__trusted_user_ca_keys | d() | length > 0  and
+  when: sshd__trusted_user_ca_keys | d() | length > 0 and
         sshd__trusted_user_ca_keys_file is defined
+  tags: [ 'role::sshd:config' ]
+
+- name: Detect supported KEX algorithms
+  ansible.builtin.command: ssh -Q kex
+  register: sshd__register_supported_kex
+  changed_when: False
+  failed_when: False
+  check_mode: False
   tags: [ 'role::sshd:config' ]
 
 - name: Setup /etc/ssh/sshd_config
@@ -174,11 +150,28 @@
   notify: [ 'Test sshd configuration and restart' ]
   tags: [ 'role::sshd:config' ]
 
+- name: Configuration of additional SSH ports with socket activation
+  when: (sshd__ports | length > 1 and ansible_service_mgr == 'systemd' and
+         sshd__socket_activation == 'enabled')
+  block:
+
+    - name: Create systemd override directory if needed
+      ansible.builtin.file:
+        path: '/etc/systemd/system/ssh.socket.d'
+        state: 'directory'
+        mode: '0755'
+
+    - name: Generate systemd socket configuration
+      ansible.builtin.template:
+        src: 'etc/systemd/system/ssh.socket.d/listen.conf.j2'
+        dest: '/etc/systemd/system/ssh.socket.d/listen.conf'
+        mode: '0644'
+      notify: [ 'Reload systemd daemon' ]
+
 - name: Make sure the system-wide known_hosts file exists
   ansible.builtin.command: touch {{ sshd__known_hosts_file }}
   args:
     creates: '{{ sshd__known_hosts_file }}'
-    warn: False
   tags: [ 'role::sshd:known_hosts' ]
 
 - name: Get list of already scanned host fingerprints
@@ -186,10 +179,9 @@
          ssh-keygen -f {{ sshd__known_hosts_file }} -F {{ item }} | grep -q '^# Host {{ item }} found'
   args:
     executable: 'bash'
-  with_flattened:
-    - '{{ sshd__known_hosts }}'
-    - '{{ sshd__group_known_hosts }}'
-    - '{{ sshd__host_known_hosts }}'
+  loop: '{{ q("flattened", sshd__known_hosts
+                           + sshd__group_known_hosts
+                           + sshd__host_known_hosts) }}'
   when: item is defined and item
   register: sshd__register_known_hosts
   changed_when: False
@@ -200,20 +192,24 @@
 - name: Scan SSH fingerprints of specified hosts
   ansible.builtin.shell: '{{ sshd__known_hosts_command }} {{ item.item }} >> {{ sshd__known_hosts_file }}'
   with_items: '{{ sshd__register_known_hosts.results | d([]) }}'
+  register: sshd__register_known_hosts_scan
+  changed_when: sshd__register_known_hosts_scan.changed | bool
   when: item is defined and item.rc > 0
   tags: [ 'role::sshd:known_hosts' ]
 
 - name: Check if /etc/ssh/moduli contains weak DH parameters
-  ansible.builtin.shell: awk '$5 < {{ (sshd__moduli_minimum | int -1) }}' /etc/ssh/moduli
+  ansible.builtin.shell: awk '$5 < {{ (sshd__moduli_minimum | int - 1) }}' /etc/ssh/moduli
   register: sshd__register_moduli
-  changed_when: sshd__register_moduli.stdout
+  changed_when: sshd__register_moduli.stdout is defined and sshd__register_moduli.stdout is truthy
   check_mode: False
 
 - name: Remove DH parameters smaller than the requested size
   ansible.builtin.shell: awk '$5 >= {{ (sshd__moduli_minimum | int - 1) }}' /etc/ssh/moduli > /etc/ssh/moduli.new ;
          [ -r /etc/ssh/moduli.new -a -s /etc/ssh/moduli.new ] && mv /etc/ssh/moduli.new /etc/ssh/moduli || true
   notify: [ 'Test sshd configuration and restart' ]
-  when: sshd__register_moduli.stdout
+  register: sshd__register_moduli
+  changed_when: sshd__register_moduli.changed | bool
+  when: sshd__register_moduli.stdout is truthy
 
 - name: Remove block on OpenSSH server startup
   ansible.builtin.file:
@@ -222,7 +218,7 @@
   notify: [ 'Test sshd configuration and restart' ]
 
 - name: Add/remove diversion of /etc/pam.d/sshd
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '/etc/pam.d/sshd'
     state: '{{ "present"
                if sshd__pam_deploy_state | d("present") != "absent"
@@ -231,7 +227,7 @@
 
 - name: Generate /etc/pam.d/sshd configuration
   ansible.builtin.template:
-    src: 'etc/pam.d/sshd.j2'
+    src: '{{ lookup("debops.debops.template_src", "etc/pam.d/sshd.j2") }}'
     dest: '/etc/pam.d/sshd'
     mode: '0644'
   when: sshd__pam_deploy_state == 'present'

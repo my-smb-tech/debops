@@ -19,7 +19,7 @@
   tags: [ 'role::btrfs:pkts' ]
 
 - name: Create BTRFS subvolumes
-  btrfs_subvolume:
+  debops.debops.btrfs_subvolume:
     state: 'present'
     path: '{{ item.key }}'
     qgroups: '{{ item.value.qgroups | d(omit) }}'
@@ -30,7 +30,7 @@
   tags: [ 'role::btrfs:subvolumes' ]
 
 - name: Remove BTRFS subvolumes
-  btrfs_subvolume:
+  debops.debops.btrfs_subvolume:
     state: 'absent'
     path: '{{ item.key }}'
   when: (item.value.state | d("present") != "present")
@@ -41,9 +41,9 @@
   ansible.builtin.file:
     path:   '{{ item.key }}'
     state:  'directory'
-    owner:  '{{ item.value.dir_owner  | d(omit) }}'
-    group:  '{{ item.value.dir_group  | d(omit) }}'
-    mode:   '{{ item.value.dir_mode   | d(omit) }}'
+    owner:  '{{ item.value.dir_owner | d(omit) }}'
+    group:  '{{ item.value.dir_group | d(omit) }}'
+    mode:   '{{ item.value.dir_mode | d(omit) }}'
   when: (item.value.state | d("present") == "present")
   with_dict: '{{ btrfs__subvolumes_combined }}'
   tags: [ 'role::btrfs:subvolumes' ]

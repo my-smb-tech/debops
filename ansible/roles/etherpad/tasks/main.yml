@@ -97,16 +97,16 @@
   tags: [ 'role::etherpad:source' ]
 
 - name: Checkout Etherpad
-  ansible.builtin.command: 'git checkout --force {{ etherpad_version }}'  # noqa no-handler
+  ansible.builtin.command: 'git checkout --force {{ etherpad_version }}'  # noqa no-handler command-instead-of-module
   args:
     chdir: '{{ etherpad_src_dir + "/" + etherpad_repository }}'
-    warn: False
   environment:
     GIT_WORK_TREE: '{{ etherpad_home + "/" + etherpad_repository }}'
   become: True
   become_user: '{{ etherpad_user }}'
   register: etherpad_register_checkout
   notify: [ 'Restart etherpad-lite' ]
+  changed_when: etherpad_register_checkout.changed | bool
   when: (etherpad_register_source is defined and etherpad_register_source is changed) or
         (etherpad_register_directory is defined and not etherpad_register_directory.stat.exists | bool)
   tags: [ 'role::etherpad:source' ]
@@ -115,7 +115,7 @@
 - name: Generate Etherpad session key
   ansible.builtin.set_fact:
     etherpad_session_key: '{{ lookup("password", secret + "/credentials/" + ansible_fqdn
-                              + "/etherpad/session_key chars=ascii,numbers,digits,hexdigits length=30") }}'
+                              + "/etherpad/session_key chars=ascii_letters,numbers,digits,hexdigits length=30") }}'
   when: secret is defined and secret
 
 - name: Generate Etherpad configuration
@@ -146,14 +146,13 @@
   when: etherpad_register_checkout is changed
 
 - name: Manage Etherpad plugins
-  npm:
+  community.general.npm:
     name: '{{ item.name | d(item) }}'
     path: '{{ etherpad_home + "/" + etherpad_repository }}'
     state: '{{ item.state | d("present") }}'
     production: yes
-  with_flattened:
-    - '{{ etherpad__default_plugins }}'
-    - '{{ etherpad_plugins }}'
+  loop: '{{ q("flattened", etherpad__default_plugins
+                           + etherpad_plugins) }}'
   become: True
   become_user: '{{ etherpad_user }}'
   notify: [ 'Restart etherpad-lite' ]
@@ -231,8 +230,9 @@
   tags: [ 'role::etherpad:api', 'role::etherpad:api:call' ]
 
 - name: Display API call responses for debugging
-  ansible.builtin.debug: var=etherpad_api_calls_exec
-  when: etherpad_api_calls_exec | d() and etherpad_api_calls_debug
+  ansible.builtin.debug:
+    var: etherpad_api_calls_exec
+  when: etherpad_api_calls_exec is defined and etherpad_api_calls_debug
   tags: [ 'role::etherpad:api', 'role::etherpad:api:call' ]
 
 - name: Make sure that Ansible local facts directory exists

@@ -25,7 +25,7 @@
 # repository. On older OS releases, using the upstream package might enable
 # websocket support. The upstream repository is enabled automatically on OS
 # releases with unsuitable Mosquitto version.
-mosquitto__upstream: '{{ True if ansible_distribution_release in [ "trusty" ]
+mosquitto__upstream: '{{ True if ansible_distribution_release in ["trusty"]
                          else False }}'
 
                                                                    # ]]]
@@ -39,8 +39,8 @@ mosquitto__upstream_key_id: '8277 CCB4 9EC5 B595 F2D2 C713 6161 1AE4 3099 3623'
 #
 # APT URLs of the upstream Mosquitto repositories based on the OS distribution.
 mosquitto__upstream_repository:
-  Debian:   'deb http://repo.mosquitto.org/debian {{ ansible_distribution_release }} main'
-  Raspbian: 'deb http://repo.mosquitto.org/debian {{ ansible_distribution_release }} main'
+  Debian:   'deb [signed-by=/etc/apt/keyrings/mosquitto.asc] http://repo.mosquitto.org/debian {{ ansible_distribution_release }} main'
+  Raspbian: 'deb [signed-by=/etc/apt/keyrings/mosquitto.asc] http://repo.mosquitto.org/debian {{ ansible_distribution_release }} main'
   Ubuntu:   'ppa:mosquitto-dev/mosquitto-ppa'
 
                                                                    # ]]]
@@ -84,9 +84,9 @@ mosquitto__version: '{{ mosquitto__register_version.stdout | d("0.0.0") }}'
 #
 # List of PyPI packages to install system-wide using :command:`pip` package
 # manager.
-mosquitto__pip_packages: '{{ ["paho-mqtt" ]
+mosquitto__pip_packages: '{{ ["paho-mqtt"]
                              if (mosquitto__distribution_release in
-                                 [ "trusty", "xenial" ])
+                                 ["trusty", "xenial"])
                              else [] }}'
                                                                    # ]]]
                                                                    # ]]]
@@ -110,7 +110,7 @@ mosquitto__group: 'mosquitto'
 # List of additional UNIX groups that the Mosquitto system account should
 # belong to. The ``ssl-cert`` UNIX group is required for access to the PKI
 # private keys to the TLS certificates.
-mosquitto__append_groups: '{{ [ "ssl-cert" ] if mosquitto__pki | bool else [] }}'
+mosquitto__append_groups: '{{ ["ssl-cert"] if mosquitto__pki | bool else [] }}'
                                                                    # ]]]
                                                                    # ]]]
 # Network configuration [[[
@@ -587,7 +587,7 @@ mosquitto__auth_users: []
                                                                    # ]]]
 # .. envvar:: mosquitto__auth_group_users [[[
 #
-# A YAML list of user accunts configured on hosts in specifc Ansible inventory
+# A YAML list of user accunts configured on hosts in specific Ansible inventory
 # group. See :ref:`mosquitto__ref_auth_users` for more details.
 mosquitto__auth_group_users: []
 
@@ -615,7 +615,7 @@ mosquitto__auth_patterns: []
 mosquitto__python__dependent_packages3:
 
   - '{{ []
-        if (mosquitto__distribution_release in [ "trusty", "xenial" ])
+        if (mosquitto__distribution_release in ["trusty", "xenial"])
         else ["python3-paho-mqtt"] }}'
 
                                                                    # ]]]
@@ -625,7 +625,7 @@ mosquitto__python__dependent_packages3:
 mosquitto__python__dependent_packages2:
 
   - '{{ []
-        if (mosquitto__distribution_release in [ "trusty", "xenial" ])
+        if (mosquitto__distribution_release in ["trusty", "xenial"])
         else ["python-paho-mqtt"] }}'
 
                                                                    # ]]]
@@ -653,6 +653,7 @@ mosquitto__etc_services__dependent_list:
 mosquitto__keyring__dependent_apt_keys:
 
   - id: '{{ mosquitto__upstream_key_id }}'
+    keyring: 'mosquitto.asc'
     repo: '{{ mosquitto__upstream_repository[ansible_distribution] }}'
     state: '{{ "present" if mosquitto__upstream | bool else "absent" }}'
 

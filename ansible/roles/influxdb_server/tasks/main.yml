@@ -29,7 +29,7 @@
   when: not (ansible_local.influxdb_server.installed | d(false) | bool)
 
 - name: Create default admin user on first install
-  influxdb_user:
+  community.general.influxdb_user:
     user_name: 'root'
     user_password: '{{ influxdb_server__root_password }}'
     state: 'present'
@@ -65,11 +65,13 @@
 - name: Move InfluxDB data files to data directory
   ansible.builtin.shell:
     'mv {{ influxdb_server__default_directory }}/* {{ influxdb_server__directory }}'
+  register: influxdb_server__register_move
+  changed_when: influxdb_server__register_move.changed | bool
   when: (not (ansible_local.influxdb_server.installed | d(false) | bool) and
          influxdb_server__directory != influxdb_server__default_directory)
 
 - name: Divert the original influxdb configuration file
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '/etc/influxdb/influxdb.conf'
     state: 'present'
     delete: True

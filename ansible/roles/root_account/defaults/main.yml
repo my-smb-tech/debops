@@ -47,7 +47,7 @@ root_account__base_packages: [ 'openssh-client' ]
 # .. envvar:: root_account__shell_packages [[[
 #
 # List of login shell APT packages expected on the host.
-root_account__shell_packages: '{{ lookup("template", "lookup/root_account__shell_packages.j2") }}'
+root_account__shell_packages: '{{ lookup("template", "lookup/root_account__shell_packages.j2") | from_yaml }}'
 
                                                                    # ]]]
 # .. envvar:: root_account__packages [[[
@@ -62,7 +62,10 @@ root_account__packages: []
 root_account__password: '{{ lookup("password", secret
                             + "/credentials/" + inventory_hostname
                             + "/root_account/password encrypt=sha512_crypt length="
-                            + root_account__password_length) }}'
+                            + root_account__password_length | string)
+                            if (root_account__enabled and
+                                root_account__password_update is truthy)
+                            else "" }}'
 
                                                                    # ]]]
 # .. envvar:: root_account__password_length [[[
@@ -123,7 +126,7 @@ root_account__ssh_key_bits: '4096'
 # primary ``root`` group might be different on other operating systems, for
 # example FreeBSD.
 root_account__group: '{{ "wheel"
-                         if (ansible_distribution in [ "FreeBSD" ])
+                         if (ansible_distribution in ["FreeBSD"])
                          else "root" }}'
 
                                                                    # ]]]
@@ -142,7 +145,7 @@ root_account__shell: ''
 
 # .. envvar:: root_account__dotfiles_enabled [[[
 #
-# Enable or disable dotfiles management, depending on the availablility of the
+# Enable or disable dotfiles management, depending on the availability of the
 # dotfiles repository installed by the :ref:`debops.yadm` role.
 root_account__dotfiles_enabled: '{{ True
                                     if ansible_local.yadm.dotfiles | d()
@@ -200,6 +203,12 @@ root_account__combined_authorized_keys: '{{ root_account__authorized_keys
 # If ``False``, the public SSH keys defined in the above variable will be added
 # to the existing keys on the ``root`` account.
 root_account__authorized_keys_exclusive: False
+
+                                                                   # ]]]
+# .. envvar:: root_account__authorized_keys_follow [[[
+#
+# If ``True``, follow symlinks instead of replacing the file.
+root_account__authorized_keys_follow: False
 
                                                                    # ]]]
 # .. envvar:: root_account__authorized_keys_state [[[

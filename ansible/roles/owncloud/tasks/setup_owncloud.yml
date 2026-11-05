@@ -8,11 +8,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 - name: Enable required Apache modules
-  apache2_module:
+  community.general.apache2_module:
     name: 'php5'
     state: 'present'
   when: owncloud__webserver == "apache"
-  with_flattened: '{{ owncloud__apache_modules }}'
+  loop: '{{ q("flattened", owncloud__apache_modules) }}'
 
 - name: Ensure restrictive permissions are set for the data directory
   ansible.builtin.file:
@@ -54,7 +54,7 @@
   ansible.builtin.file:
     path: '{{ item }}'
     state: 'absent'
-  with_flattened:
+  loop:
     - '{{ owncloud__deploy_path }}/config/custom.config.php'
 
 # .. ]]]
@@ -90,7 +90,8 @@
     owncloud__do_autosetup: '{{ (owncloud__autosetup and
                                  owncloud__admin_username | d() and
                                  (owncloud__register_occ_check is not skipped) and
-                                 "is not installed" in owncloud__register_occ_check.stdout) }}'
+                                 (("is not installed" in owncloud__register_occ_check.stdout) or
+                                  ("is not installed" in owncloud__register_occ_check.stderr))) }}'
 
 - name: Automatically finish setup via the occ tool
   ansible.builtin.command: |
@@ -106,6 +107,7 @@
            '--admin-pass={{ owncloud__admin_password }}'
            {% endif %}
   register: owncloud__register_occ_install
+  changed_when: owncloud__register_occ_install.changed | bool
   when: owncloud__do_autosetup | bool
 
 # .. ]]]
@@ -118,7 +120,7 @@
     loop_var: 'owncloud__occ_item'
   tags: [ 'role::owncloud:occ_config' ]
   when: (owncloud__apps_config_combined is mapping and owncloud__apps_config_combined.keys() | length)
-  with_flattened:
+  loop:
     - command: 'config:list'
       get_output: True
 
@@ -145,12 +147,11 @@
   loop_control:
     loop_var: 'owncloud__occ_item'
   tags: [ 'role::owncloud:occ' ]
-  with_flattened:
-    - '{{ owncloud__role_occ_cmd_list }}'
-    - '{{ owncloud__occ_cmd_list }}'
-    - '{{ owncloud__group_occ_cmd_list }}'
-    - '{{ owncloud__host_occ_cmd_list }}'
-    - '{{ owncloud__dependent_occ_cmd_list }}'
+  loop: '{{ q("flattened", owncloud__role_occ_cmd_list
+                           + owncloud__occ_cmd_list
+                           + owncloud__group_occ_cmd_list
+                           + owncloud__host_occ_cmd_list
+                           + owncloud__dependent_occ_cmd_list) }}'
 # .. ]]]
 
 # Configure cron job for background tasks [[[
@@ -179,21 +180,10 @@
 
 # ownCloud upgrades [[[
 
-- name: Enable the package manager hook script for ownCloud
-  ansible.builtin.template:
-    src: 'etc/apt/apt.conf.d/dpkg-hook.j2'
-    dest: '/etc/apt/apt.conf.d/80owncloud-dpkg-hook'
-    owner: 'root'
-    group: 'root'
-    mode: '0644'
-  tags: [ 'role::owncloud:auto_upgrade' ]
-  when: (owncloud__auto_database_upgrade_enabled | bool)
-
 - name: Disable the package manager hook script for ownCloud
   ansible.builtin.file:
     path: '/etc/apt/apt.conf.d/80owncloud-dpkg-hook'
     state: 'absent'
-  when: not (owncloud__auto_database_upgrade_enabled | bool)
 
 # .. ]]]
 

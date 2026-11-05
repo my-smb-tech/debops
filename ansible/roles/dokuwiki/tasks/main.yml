@@ -29,7 +29,7 @@
     name: '{{ dokuwiki__user }}'
     group: '{{ dokuwiki__group }}'
     home: '{{ dokuwiki__home }}'
-    shell: '/bin/false'
+    shell: '{{ dokuwiki__shell }}'
     comment: 'DokuWiki'
     createhome: False
     system: True
@@ -78,10 +78,9 @@
 - name: Get commit hash of target checkout
   environment:
     GIT_WORK_TREE: '{{ dokuwiki__git_checkout }}'
-  ansible.builtin.command: git rev-parse {{ dokuwiki__git_version }}
+  ansible.builtin.command: git rev-parse {{ dokuwiki__git_version }}  # noqa command-instead-of-module
   args:
     chdir: '{{ dokuwiki__git_dest }}'
-    warn: False
   become: True
   become_user: '{{ dokuwiki__user }}'
   register: dokuwiki__register_target_branch
@@ -90,13 +89,13 @@
 - name: Checkout DokuWiki
   environment:
     GIT_WORK_TREE: '{{ dokuwiki__git_checkout }}'
-  ansible.builtin.command: git checkout -f {{ dokuwiki__git_version }}
+  ansible.builtin.command: git checkout -f {{ dokuwiki__git_version }}   # noqa command-instead-of-module
   args:
     chdir: '{{ dokuwiki__git_dest }}'
-    warn: False
   become: True
   become_user: '{{ dokuwiki__user }}'
   register: dokuwiki__register_checkout
+  changed_when: dokuwiki__register_checkout.changed | bool
   when: (dokuwiki__register_source.before is undefined or
          (dokuwiki__register_source.before is defined and
           dokuwiki__register_target_branch.stdout is defined and
@@ -109,11 +108,11 @@
   ansible.builtin.file:
     path: '{{ dokuwiki__git_checkout + "/lib/plugins/" + item.dest }}'
     state: 'absent'
-  with_flattened:
-    - '{{ dokuwiki__default_plugins }}'
-    - '{{ dokuwiki__plugins }}'
+  loop: '{{ q("flattened", dokuwiki__default_plugins
+                           + dokuwiki__plugins) }}'
   when: (dokuwiki__plugins_enabled | bool and
-         (item.dest | d() and item.dest) and (item.state | d() and item.state == 'absent'))
+         (item.dest is defined and item.dest is truthy) and
+        (item.state | d('present') == 'absent'))
 
 - name: Install specified plugins from git repositories
   ansible.builtin.git:
@@ -123,24 +122,23 @@
     update: True
   become: True
   become_user: '{{ dokuwiki__user }}'
-  with_flattened:
-    - '{{ dokuwiki__default_plugins }}'
-    - '{{ dokuwiki__plugins }}'
+  loop: '{{ q("flattened", dokuwiki__default_plugins
+                           + dokuwiki__plugins) }}'
   register: dokuwiki__register_git_plugins
   until: dokuwiki__register_git_plugins is succeeded
   when: (dokuwiki__plugins_enabled | bool and
-         (item.repo | d() and item.repo) and (item.dest | d() and item.dest) and
-         (item.state is undefined or (item.state | d() and item.state != 'absent')))
+         (item.repo is defined and item.repo is truthy) and (item.dest is defined and item.dest is truthy) and
+         (item.state | d('present') != 'absent'))
 
 - name: Remove specified templates if requested
   ansible.builtin.file:
     path: '{{ dokuwiki__git_checkout + "/lib/tpl/" + item.dest }}'
     state: 'absent'
-  with_flattened:
-    - '{{ dokuwiki__default_templates }}'
-    - '{{ dokuwiki__templates }}'
+  loop: '{{ q("flattened", dokuwiki__default_templates
+                           + dokuwiki__templates) }}'
   when: (dokuwiki__plugins_enabled | bool and
-         (item.dest | d() and item.dest) and (item.state | d() and item.state == 'absent'))
+         (item.dest is defined and item.dest is truthy) and
+        (item.state | d('present') == 'absent'))
 
 - name: Install specified templates from git repositories
   ansible.builtin.git:
@@ -150,14 +148,13 @@
     update: True
   become: True
   become_user: '{{ dokuwiki__user }}'
-  with_flattened:
-    - '{{ dokuwiki__default_templates }}'
-    - '{{ dokuwiki__templates }}'
+  loop: '{{ q("flattened", dokuwiki__default_templates
+                           + dokuwiki__templates) }}'
   register: dokuwiki__register_git_templates
   until: dokuwiki__register_git_templates is succeeded
   when: (dokuwiki__plugins_enabled | bool and
-         (item.repo | d() and item.repo) and (item.dest | d() and item.dest) and
-         (item.state is undefined or (item.state | d() and item.state != 'absent')))
+         (item.repo is defined and item.repo is truthy) and (item.dest is defined and item.dest is truthy) and
+         (item.state | d('present') != 'absent'))
 
 - name: Generate protected local configuration file
   ansible.builtin.template:
@@ -243,38 +240,36 @@
   ansible.builtin.file:
     path:  '{{ item.dest | d(item.path | d(item.name)) }}'
     state: 'absent'
-  with_flattened:
-    - '{{ dokuwiki__extra_files }}'
-    - '{{ dokuwiki__group_extra_files }}'
-    - '{{ dokuwiki__host_extra_files }}'
-  when: (item.dest | d() or item.path | d() or item.name | d()) and
+  loop: '{{ q("flattened", dokuwiki__extra_files
+                           + dokuwiki__group_extra_files
+                           + dokuwiki__host_extra_files) }}'
+  when: ((item.dest is defined and item.dest is truthy) or (item.path is defined and item.path is truthy) or (item.name is defined and item.name is truthy)) and
         (item.state | d('present') == 'absent')
   tags: [ 'role::dokuwiki' ]
 
 - name: Copy extra files to remote host
   ansible.builtin.copy:
-    dest:     '{{ item.dest     | d(item.path | d(item.name)) }}'
-    src:      '{{ item.src      | d(omit) }}'
-    content:  '{{ item.content  | d(omit) }}'
-    owner:    '{{ item.owner    | d(omit) }}'
-    group:    '{{ item.group    | d(omit) }}'
-    mode:     '{{ item.mode     | d(omit) }}'
-    selevel:  '{{ item.selevel  | d(omit) }}'
-    serole:   '{{ item.serole   | d(omit) }}'
-    setype:   '{{ item.setype   | d(omit) }}'
-    seuser:   '{{ item.seuser   | d(omit) }}'
-    follow:   '{{ item.follow   | d(omit) }}'
-    force:    '{{ item.force    | d(omit) }}'
-    backup:   '{{ item.backup   | d(omit) }}'
+    dest:     '{{ item.dest | d(item.path | d(item.name)) }}'
+    src:      '{{ item.src | d(omit) }}'
+    content:  '{{ item.content | d(omit) }}'
+    owner:    '{{ item.owner | d(omit) }}'
+    group:    '{{ item.group | d(omit) }}'
+    mode:     '{{ item.mode | d(omit) }}'
+    selevel:  '{{ item.selevel | d(omit) }}'
+    serole:   '{{ item.serole | d(omit) }}'
+    setype:   '{{ item.setype | d(omit) }}'
+    seuser:   '{{ item.seuser | d(omit) }}'
+    follow:   '{{ item.follow | d(omit) }}'
+    force:    '{{ item.force | d(omit) }}'
+    backup:   '{{ item.backup | d(omit) }}'
     validate: '{{ item.validate | d(omit) }}'
     remote_src: '{{ item.remote_src | d(omit) }}'
     directory_mode: '{{ item.directory_mode | d(omit) }}'
-  with_flattened:
-    - '{{ dokuwiki__extra_files }}'
-    - '{{ dokuwiki__group_extra_files }}'
-    - '{{ dokuwiki__host_extra_files }}'
-  when: (item.src | d() or item.content is defined) and
-        (item.dest | d() or item.path | d() or item.name | d()) and
+  loop: '{{ q("flattened", dokuwiki__extra_files
+                           + dokuwiki__group_extra_files
+                           + dokuwiki__host_extra_files) }}'
+  when: ((item.src is defined and item.src is truthy) or (item.content is defined)) and
+        ((item.dest is defined and item.dest is truthy) or (item.path is defined and item.path is truthy) or (item.name is defined and item.name is truthy)) and
         (item.state | d('present') != 'absent')
   tags: [ 'role::dokuwiki' ]
 

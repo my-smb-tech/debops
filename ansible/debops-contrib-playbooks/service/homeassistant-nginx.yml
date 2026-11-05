@@ -4,14 +4,22 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 - name: Setup and manage Home Assistant with Nginx as reverse proxy
-  collections: [ 'debops.debops', 'debops.roles01',
-                 'debops.roles02', 'debops.roles03' ]
+  collections: [ 'debops.debops' ]
   hosts: [ 'debops_service_homeassistant_nginx' ]
   become: True
 
   environment: '{{ inventory__environment | d({})
                    | combine(inventory__group_environment | d({}))
                    | combine(inventory__host_environment  | d({})) }}'
+
+  pre_tasks:
+
+    - name: Prepare homeassistant environment
+      ansible.builtin.import_role:
+        name: 'homeassistant'
+        tasks_from: 'main_env'
+      tags: [ 'role::homeassistant', 'role::nginx' ]
+
 
   roles:
 

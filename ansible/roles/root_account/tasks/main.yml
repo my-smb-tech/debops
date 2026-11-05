@@ -29,14 +29,15 @@
   tags: [ 'meta::facts' ]
 
 - name: Check if preferred shell exists
-  ansible.builtin.stat: path="{{ root_account__shell }}"
+  ansible.builtin.stat:
+    path: '{{ root_account__shell }}'
   register: root_account__register_shell
-  when: root_account__enabled | bool and root_account__shell | d(False)
+  when: root_account__enabled | bool and root_account__shell is truthy
 
 - name: Fail if setting a shell that does not exist
   ansible.builtin.fail:
     msg: "Trying to set a shell that does not exist, this can lock you out!"
-  when: root_account__enabled | bool and root_account__shell | d(False) and not root_account__register_shell.stat.exists and
+  when: root_account__enabled | bool and root_account__shell is truthy and not root_account__register_shell.stat.exists and
         not ansible_check_mode
 
 - name: Enforce root system group
@@ -66,6 +67,9 @@
     password:         '{{ root_account__password if root_account__password else omit }}'
     shell:            '{{ root_account__shell if root_account__shell else omit }}'
   when: root_account__enabled | bool
+  # Note: using the override variable might not work here correctly when
+  # 'passlib' Python module is not installed on the Ansible Controller.
+  # The task will show up as hidden even when the 'debops__no_log=false' is used.
   no_log: '{{ (debops__no_log | d(True)) if root_account__password else False }}'
 
 - name: Enforce root home permissions
@@ -84,8 +88,8 @@
     exclusive: '{{ root_account__authorized_keys_exclusive | bool }}'
     state: 'present'
     user: 'root'
-  when: root_account__enabled | bool and root_account__combined_authorized_keys | d() and
-        root_account__authorized_keys_state != 'absent'
+    follow: '{{ root_account__authorized_keys_follow | bool }}'
+  when: root_account__enabled | bool and root_account__authorized_keys_state != 'absent'
 
 - name: Remove /root/.ssh/authorized_keys file if requested
   ansible.builtin.file:
@@ -104,6 +108,8 @@
   ansible.builtin.command: usermod --add-subuids {{ (item | string + "-" + (item | int + root_account__subuid_count | int) | string) }}
                    --add-subgids {{ (item | string + "-" + (item | int + root_account__subuid_count | int) | string) }} root
   with_items: '{{ root_account__subuid_start }}'
+  register: root_account__register_usermod
+  changed_when: root_account__register_usermod.changed | bool
   when: root_account__enabled | bool and root_account__subuid_enabled | bool and
         not root_account__register_subuid.stdout | d()
 
@@ -117,8 +123,8 @@
         yadm pull
     fi
   register: root_account__register_dotfiles
-  changed_when: ('Already up to date.' not in root_account__register_dotfiles.stdout_lines|regex_replace('-', ' '))
-  when: ((ansible_local | d() and ansible_local.yadm | d() and (ansible_local.yadm.installed | d()) | bool) and
+  changed_when: ('Already up to date.' not in root_account__register_dotfiles.stdout_lines | regex_replace('-', ' '))
+  when: ((ansible_local is defined and ansible_local.yadm is defined and (ansible_local.yadm.installed | d()) | bool) and
          root_account__dotfiles_enabled | bool)
   check_mode: False
 

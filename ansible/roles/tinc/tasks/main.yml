@@ -95,7 +95,7 @@
 - name: Create required directories
   ansible.builtin.file:
     path: '/etc/tinc/{{ item.value.name | d(item.key) }}/hosts/{{ (item.hostname | d(tinc__hostname))
-                                                                  | replace("-","_") }}.d'
+                                                                  | replace("-", "_") }}.d'
     state: 'directory'
     owner: 'root'
     group: 'root'
@@ -112,7 +112,7 @@
     mode: '0644'
     unsafe_writes: '{{ True if (core__unsafe_writes | d(ansible_local.core.unsafe_writes | d()) | bool) else omit }}'
   with_dict: '{{ tinc__combined_networks }}'
-  when: item.value.state | d('present') != 'absent' and item.value.tinc_options | d()
+  when: item.value.state | d('present') != 'absent' and item.value.tinc_options is defined and item.value.tinc_options is truthy
   notify: [ 'Reload tinc' ]
 
 - name: Remove deprecated dhclient hook script
@@ -134,7 +134,7 @@
 - name: Generate tinc-down network scripts
   ansible.builtin.template:
     src: 'etc/tinc/network/tinc-down.j2'
-    dest: '/etc/tinc/{{ item.value.name  | d(item.key) }}/tinc-down'
+    dest: '/etc/tinc/{{ item.value.name | d(item.key) }}/tinc-down'
     owner: 'root'
     group: '{{ tinc__group }}'
     mode: '0750'
@@ -174,12 +174,12 @@
 
 - name: Create persistent copy of host public key
   ansible.builtin.command: cp /etc/tinc/{{ item.value.name | d(item.key) }}/hosts/{{ (item.value.hostname | d(tinc__hostname))
-                                                                     | replace("-","_") }}
+                                                                     | replace("-", "_") }}
               /etc/tinc/{{ item.value.name | d(item.key) }}/hosts/{{ (item.value.hostname | d(tinc__hostname))
-                                                                     | replace("-","_") + ".d/99_rsa-public-key" }}
+                                                                     | replace("-", "_") + ".d/99_rsa-public-key" }}
   args:
     creates: /etc/tinc/{{ item.value.name | d(item.key) }}/hosts/{{ (item.value.hostname | d(tinc__hostname))
-                                                                    | replace("-","_") + ".d/99_rsa-public-key" }}
+                                                                    | replace("-", "_") + ".d/99_rsa-public-key" }}
   with_dict: '{{ tinc__combined_networks }}'
   when: item.value.state | d('present') != 'absent'
 
@@ -188,7 +188,7 @@
   ansible.builtin.template:
     src: 'etc/tinc/network/hosts/host-config.j2'
     dest: '/etc/tinc/{{ item.value.name | d(item.key) }}/hosts/{{ (item.value.hostname | d(tinc__hostname))
-                                                                  | replace("-","_") }}.d/00_host-config'
+                                                                  | replace("-", "_") }}.d/00_host-config'
     owner: 'root'
     group: 'root'
     mode: '0640'
@@ -199,9 +199,9 @@
 - name: Assemble host configuration file from parts
   ansible.builtin.assemble:
     src: '/etc/tinc/{{ item.value.name | d(item.key) }}/hosts/{{ (item.value.hostname | d(tinc__hostname))
-                                                                 | replace("-","_") }}.d'
+                                                                 | replace("-", "_") }}.d'
     dest: '/etc/tinc/{{ item.value.name | d(item.key) }}/hosts/{{ (item.value.hostname | d(tinc__hostname))
-                                                                  | replace("-","_") }}'
+                                                                  | replace("-", "_") }}'
     owner: 'root'
     group: '{{ tinc__group }}'
     mode: '0640'
@@ -213,10 +213,10 @@
 - name: Upload public keys from hosts to Ansible Controller
   ansible.builtin.fetch:
     src: '/etc/tinc/{{ item.value.name | d(item.key) }}/hosts/{{ (item.value.hostname | d(tinc__hostname))
-                                                                 | replace("-","_") }}'
+                                                                 | replace("-", "_") }}'
     dest: '{{ secret + "/tinc/networks/" + item.value.name | d(item.key)
               + "/by-network/" + item.value.name | d(item.key) + "/hosts/"
-              + (item.value.hostname | d(tinc__hostname) | replace("-","_")) }}'
+              + (item.value.hostname | d(tinc__hostname) | replace("-", "_")) }}'
     flat: True
   with_dict: '{{ tinc__combined_networks }}'
   when: item.value.state | d('present') != 'absent'
@@ -254,7 +254,7 @@
   with_nested:
     - '{{ lookup("template", "lookup/tinc__network_list.j2", convert_data=False) | from_yaml }}'
     - '{{ lookup("template", "lookup/tinc__inventory_groups.j2", convert_data=False) | from_yaml }}'
-  when: (item.0.name | d() and item.0.state | d('present') != 'absent' and
+  when: (item.0.name is defined and item.0.name is truthy and item.0.state | d('present') != 'absent' and
          item.1 in item.0.inventory_groups | d([]) and item.1 in group_names)
   notify: [ 'Reload tinc' ]
 
@@ -330,7 +330,7 @@
     state: '{{ (item.value.state | d("present") in ["absent"]) | ternary("stopped", "started") }}'
   with_dict: '{{ tinc__combined_networks }}'
   when: tinc__systemd | bool and item.value.state | d('present') != 'absent' and
-        item.value.port | d()
+        item.value.port is defined and item.value.port is truthy
 
 # Ansible facts [[[1
 

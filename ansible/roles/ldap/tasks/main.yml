@@ -36,7 +36,7 @@
   when: ldap__enabled | bool and not ldap__dependent_play | bool
 
 - name: Divert original LDAP client configuration
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '/etc/ldap/ldap.conf'
   when: ldap__enabled | bool and not ldap__dependent_play | bool
 
@@ -77,17 +77,17 @@
   tags: [ 'role::ldap:tasks', 'skip::ldap:tasks' ]
 
 - name: Perform LDAP tasks
-  include_tasks: 'ldap_tasks.yml'
+  ansible.builtin.include_tasks: 'ldap_tasks.yml'
   loop: '{{ q("flattened", ldap__combined_tasks) | debops.debops.parse_kv_items }}'
   loop_control:
     label: '{{ {"state": item.state,
                 "dn": item.dn,
                 "attributes": item.attributes | d({})} }}'
   when: ldap__enabled | bool and ldap__admin_enabled | bool and
-        item.name | d() and item.dn | d() and
+        item.name is defined and item.name is truthy and item.dn is defined and item.dn is truthy and
         item.state | d('present') not in [ 'init', 'ignore' ]
   tags: [ 'role::ldap:tasks', 'skip::ldap:tasks' ]
   no_log: '{{ debops__no_log | d(item.no_log | d(True
                                  if ("userPassword" in (item.attributes | d({})).keys() or
-                                     "olcRootPW"    in (item.attributes | d({})).keys())
+                                     "olcRootPW" in (item.attributes | d({})).keys())
                                  else False)) }}'

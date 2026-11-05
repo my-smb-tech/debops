@@ -39,6 +39,8 @@
 
 - name: Move persistent journal to volatile storage if requested
   ansible.builtin.command: 'journalctl --relinquish-var'
+  register: journald__register_relinquish_var
+  changed_when: journald__register_relinquish_var.changed | bool
   when: (journald__enabled | bool and journald__version is version("244", ">=") and
          journald__persistent_state == 'absent' and
          (ansible_local.journald.persistent | d(False)) | bool)
@@ -48,7 +50,7 @@
     path: '/var/log/journal'
     state: 'absent'
   when: journald__enabled | bool and
-        journald__storage in [ 'auto', 'none', 'volatile' ] and
+        journald__storage in ['auto', 'none', 'volatile'] and
         journald__persistent_state == 'absent'
 
 - name: Create persistent journal storage directory
@@ -59,22 +61,22 @@
     mode: '2755'
   register: journald__register_persistent
   when: journald__enabled | bool and
-        journald__storage in [ 'auto', 'persistent' ] and
+        journald__storage in ['auto', 'persistent'] and
         journald__persistent_state != 'absent'
 
 - name: Apply extended permissions in the persistent storage
   ansible.builtin.command: 'systemd-tmpfiles --create --prefix /var/log/journal'
   changed_when: False
   when: journald__enabled | bool and
-        journald__storage in [ 'auto', 'persistent' ] and
+        journald__storage in ['auto', 'persistent'] and
         journald__persistent_state != 'absent'
 
-- name: Create Foward Secure Seal keys when requested
+- name: Create Forward Secure Seal keys when requested
   ansible.builtin.command: 'journalctl --setup-keys --interval={{ journald__fss_interval }}'
   register: journald__register_fss
   changed_when: journald__register_fss.stderr_lines | count > 1
   when: (journald__enabled | bool and
-         journald__storage in [ 'auto', 'persistent' ] and
+         journald__storage in ['auto', 'persistent'] and
          journald__persistent_state != 'absent' and
          journald__fss_enabled | bool and
         (not ansible_local.journald.sealed | d()) | bool)

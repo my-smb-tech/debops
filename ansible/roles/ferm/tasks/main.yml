@@ -31,7 +31,7 @@
   when: ferm__enabled | bool
 
 - name: Manage iptables backend using alternatives
-  alternatives:
+  community.general.alternatives:
     name: '{{ item.name }}'
     path: '{{ item.path }}'
   loop:
@@ -62,10 +62,10 @@
     dest:  '{{ item.dest }}'
     owner: '{{ item.owner | d(omit) }}'
     group: '{{ item.group | d(omit) }}'
-    mode:  '{{ item.mode  | d(omit) }}'
+    mode:  '{{ item.mode | d(omit) }}'
     directory_mode: '{{ item.directory_mode | d(omit) }}'
     follow: '{{ item.follow | d(omit) }}'
-    force:  '{{ item.force  | d(omit) }}'
+    force:  '{{ item.force | d(omit) }}'
   loop: '{{ (ferm__custom_files + ferm__group_custom_files
              + ferm__host_custom_files) | flatten }}'
   loop_control:
@@ -85,7 +85,7 @@
   notify: [ 'Restart ferm' ]
 
 - name: Add/remove diversion of /etc/ferm/ferm.conf
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '/etc/ferm/ferm.conf'
     state: '{{ "present" if ferm__enabled | bool else "absent" }}'
     delete: True
@@ -122,11 +122,11 @@
     owner: 'root'
     group: 'adm'
     mode: '0644'
-  loop: '{{ ferm__parsed_rules | dict2items }}'
+  loop: '{{ ferm__parsed_rules | d({}) | dict2items }}'
   loop_control:
     label: '{{ item.key }}'
   register: ferm__register_rules_created
-  when: (item.value.rule_state | d(item.value.state | d('present')) not in [ 'absent', 'ignore' ])
+  when: (item.value.rule_state | d(item.value.state | d('present')) not in ['absent', 'ignore'])
   tags: [ 'role::ferm:rules' ]
 
 - name: Remove unknown firewall rules
@@ -141,7 +141,9 @@
             + ferm__register_rules_created.results }}'
   loop_control:
     label: '{{ item.item.key }}'
-  when: (item.item.key | d() and item is changed)
+  register: ferm__register_unknown_rules
+  changed_when: ferm__register_unknown_rules.changed | bool
+  when: item.item.key is defined and item.item.key is truthy and item is changed
   tags: [ 'role::ferm:rules' ]
 
 - name: Remove iptables INPUT rules if requested
@@ -150,12 +152,11 @@
            | d(item.weight | d("50")) }}_{{ item.filename
            | d(item.type + "_" + item.name | d((item.dport[0] if item.dport | d() else "rules"))) }}.conf'
     state: 'absent'
-  with_flattened:
-    - '{{ ferm_input_list }}'
-    - '{{ ferm_input_group_list }}'
-    - '{{ ferm_input_host_list }}'
-    - '{{ ferm_input_dependent_list }}'
-  when: (ferm__enabled | bool and item.type | d() and (item.delete | d() | bool))
+  loop: '{{ q("flattened", ferm_input_list
+                           + ferm_input_group_list
+                           + ferm_input_host_list
+                           + ferm_input_dependent_list) }}'
+  when: (ferm__enabled | bool and item.type is defined and item.type is truthy and (item.delete | d() | bool))
   register: ferm__register_input_rules_del
   tags: [ 'role::ferm:rules' ]
 
@@ -168,12 +169,11 @@
     owner: 'root'
     group: 'adm'
     mode: '0644'
-  with_flattened:
-    - '{{ ferm_input_list }}'
-    - '{{ ferm_input_group_list }}'
-    - '{{ ferm_input_host_list }}'
-    - '{{ ferm_input_dependent_list }}'
-  when: (ferm__enabled | bool and item.type | d() and not (item.delete | d() | bool))
+  loop: '{{ q("flattened", ferm_input_list
+                           + ferm_input_group_list
+                           + ferm_input_host_list
+                           + ferm_input_dependent_list) }}'
+  when: (ferm__enabled | bool and item.type is defined and item.type is truthy and not (item.delete | d() | bool))
   register: ferm__register_input_rules_add
   tags: [ 'role::ferm:rules' ]
 

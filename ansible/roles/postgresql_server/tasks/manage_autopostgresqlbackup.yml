@@ -4,12 +4,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 - name: Divert the original autopostgresqlbackup script
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '/usr/sbin/autopostgresqlbackup'
     divert: '/usr/share/doc/autopostgresqlbackup/script.dpkg-divert'
 
 - name: Divert the original autopostgresqlbackup cron job
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '/etc/cron.daily/autopostgresqlbackup'
     divert: '/usr/share/doc/autopostgresqlbackup/cron.dpkg-divert'
 
@@ -20,8 +20,7 @@
     owner: 'root'
     group: 'root'
     mode: '0644'
-  with_flattened:
-    - '{{ postgresql_server__clusters }}'
+  loop: '{{ q("flattened", postgresql_server__clusters) }}'
 
 - name: Configure autopostgresqlbackup
   ansible.builtin.template:
@@ -30,26 +29,23 @@
     owner: 'root'
     group: 'root'
     mode: '0755'
-  with_flattened:
-    - '{{ postgresql_server__clusters }}'
+  loop: '{{ q("flattened", postgresql_server__clusters) }}'
 
 - name: Disable autopostgresqlbackup from running daily
   ansible.builtin.file:
     path: '/etc/cron.daily/autopostgresqlbackup-{{ (item.version | d(postgresql_server__version))
-                                                   | replace(".","_") }}-{{ item.name }}'
+                                                   | replace(".", "_") }}-{{ item.name }}'
     state: 'absent'
   when: ((item.auto_backup | d() and not item.auto_backup | bool) or not postgresql_server__auto_backup | bool)
-  with_flattened:
-    - '{{ postgresql_server__clusters }}'
+  loop: '{{ q("flattened", postgresql_server__clusters) }}'
 
 - name: Enable autopostgresqlbackup to run daily
   ansible.builtin.template:
     src: 'etc/cron.daily/autopostgresqlbackup.j2'
     dest: '/etc/cron.daily/autopostgresqlbackup-{{ (item.version | d(postgresql_server__version))
-                                                   | replace(".","_") }}-{{ item.name }}'
+                                                   | replace(".", "_") }}-{{ item.name }}'
     owner: 'root'
     group: 'root'
     mode: '0755'
   when: ((item.auto_backup is undefined or item.auto_backup | bool) and postgresql_server__auto_backup | bool)
-  with_flattened:
-    - '{{ postgresql_server__clusters }}'
+  loop: '{{ q("flattened", postgresql_server__clusters) }}'

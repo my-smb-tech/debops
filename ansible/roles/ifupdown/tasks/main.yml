@@ -48,10 +48,10 @@
   ansible.builtin.file:
     path: '/etc/network/interfaces.config.d'
     state: 'absent'
-  when: (ansible_local | d() and ansible_local.debops_fact | d() and
+  when: (ansible_local is defined and ansible_local.debops_fact is defined and
          ansible_local.debops_fact.enabled | bool and
          (ansible_local.debops_fact.version is undefined or
-          (ansible_local.debops_fact.version.ifupdown | d("0.0.0") is version_compare("0.3.0","<"))))
+          (ansible_local.debops_fact.version.ifupdown | d("0.0.0") is version_compare("0.3.0", "<"))))
 
 - name: Create configuration directories
   ansible.builtin.file:
@@ -90,7 +90,7 @@
     mode: '{{ item.value.mode | d("0644") }}'
   with_dict: '{{ ifupdown__combined_interfaces }}'
   register: ifupdown__register_interfaces_created
-  when: item.value.state | d('present') not in [ 'absent', 'ignore' ]
+  when: item.value.state | d('present') not in ['absent', 'ignore']
 
 - name: Remove unknown interface configuration
   ansible.builtin.shell: find /etc/network/interfaces.config.d -maxdepth 1 -type f
@@ -102,20 +102,22 @@
   with_items:  # noqa no-handler
     - '{{ ifupdown__register_interfaces_removed.results }}'
     - '{{ ifupdown__register_interfaces_created.results }}'
-  when: (item.item.key | d() and item is changed)
+  register: ifupdown__register_iface_cleanup
+  changed_when: ifupdown__register_iface_cleanup.changed | bool
+  when: item.item.key is defined and item.item.key is truthy and item is changed
 
 - name: Mark modified interfaces for processing
   ansible.builtin.copy:  # noqa no-handler
     content: |
       {{ ("created"
-          if ((item.item.key | replace(':','_') | replace('.','_')) not in ansible_interfaces and
+          if ((item.item.key | replace(':', '_') | replace('.', '_')) not in ansible_interfaces and
               (item.diff is undefined or
-               (item.diff | d() and item.diff.after | d() and
-                item.diff.after_header | d() and
+               (item.diff is defined and item.diff.after is defined and
+                item.diff.after_header is defined and
                 item.diff.after_header == "dynamically generated")))
           else ("removed"
-                if (item.diff | d() and item.diff.after | d() and
-                    item.diff.after.state | d() and
+                if (item.diff is defined and item.diff.after is defined and
+                    item.diff.after.state is defined and
                     item.diff.after.state == "absent")
                 else "changed")) }}
     dest: '{{ "/run/network/debops-ifupdown-reconfigure," +
@@ -131,56 +133,55 @@
     - '{{ ifupdown__register_interfaces_removed.results }}'
     - '{{ ifupdown__register_interfaces_created.results }}'
   notify: [ 'Apply ifupdown configuration' ]
-  when: (item.item.key | d() and item is changed)
+  when: item.item.key is defined and item.item.key is truthy and item is changed
 
 - name: Remove custom configuration files
   ansible.builtin.file:
     path:  '{{ item.dest | d(item.path) }}'
     state: 'absent'
-  with_flattened:
-    - '{{ ifupdown__custom_files }}'
-    - '{{ ifupdown__custom_group_files }}'
-    - '{{ ifupdown__custom_host_files }}'
-    - '{{ ifupdown__custom_dependent_files }}'
-  when: ((item.dest | d() or item.path | d()) and
+  loop: '{{ q("flattened", ifupdown__custom_files
+                           + ifupdown__custom_group_files
+                           + ifupdown__custom_host_files
+                           + ifupdown__custom_dependent_files) }}'
+  when: (((item.dest is defined and item.dest is truthy) or
+          (item.path is defined and item.path is truthy)) and
          item.state | d('present') == 'absent')
 
 - name: Generate custom configuration files
   ansible.builtin.copy:
-    dest:    '{{ item.dest    | d(item.path) }}'
-    src:     '{{ item.src     | d(omit) }}'
+    dest:    '{{ item.dest | d(item.path) }}'
+    src:     '{{ item.src | d(omit) }}'
     content: '{{ item.content | d(omit) }}'
-    owner:   '{{ item.owner   | d("root") }}'
-    group:   '{{ item.group   | d("root") }}'
-    mode:    '{{ item.mode    | d("0644") }}'
-    force:   '{{ item.force   | d(omit) }}'
-  with_flattened:
-    - '{{ ifupdown__custom_files }}'
-    - '{{ ifupdown__custom_group_files }}'
-    - '{{ ifupdown__custom_host_files }}'
-    - '{{ ifupdown__custom_dependent_files }}'
-  when: ((item.dest | d() or item.path | d()) and
-         (item.src | d() or item.content | d()) and
+    owner:   '{{ item.owner | d("root") }}'
+    group:   '{{ item.group | d("root") }}'
+    mode:    '{{ item.mode | d("0644") }}'
+    force:   '{{ item.force | d(omit) }}'
+  loop: '{{ q("flattened", ifupdown__custom_files
+                           + ifupdown__custom_group_files
+                           + ifupdown__custom_host_files
+                           + ifupdown__custom_dependent_files) }}'
+  when: (((item.dest is defined and item.dest is truthy) or
+          (item.path is defined and item.path is truthy)) and
+         ((item.src is defined and item.src is truthy) or
+          (item.content is defined and item.content is truthy)) and
          item.state | d('present') != 'absent')
 
 - name: Remove custom ifupdown hooks
   ansible.builtin.file:
     path: '{{ item.dest | d("/" + item.hook) }}'
     state: 'absent'
-  with_flattened:
-    - '{{ ifupdown__custom_hooks }}'
-  when: item.name | d() and item.state | d('present') == 'absent'
+  loop: '{{ q("flattened", ifupdown__custom_hooks) }}'
+  when: item.name is defined and item.name is truthy and item.state | d('present') == 'absent'
 
 - name: Install custom ifupdown hooks
   ansible.builtin.template:
-    src:  '{{ item.src  | d(item.hook + ".j2") }}'
+    src:  '{{ item.src | d(item.hook + ".j2") }}'
     dest: '{{ item.dest | d("/" + item.hook) }}'
     owner: 'root'
     group: 'root'
     mode: '{{ item.mode | d("0755") }}'
-  with_flattened:
-    - '{{ ifupdown__custom_hooks }}'
-  when: item.name | d() and item.state | d('present') != 'absent'
+  loop: '{{ q("flattened", ifupdown__custom_hooks) }}'
+  when: item.name is defined and item.name is truthy and item.state | d('present') != 'absent'
 
 - name: Install reconfiguration script if needed
   ansible.builtin.copy:
@@ -192,11 +193,11 @@
   when: not ifupdown__reconfigure_auto | bool
 
 - name: Save role version information
-  ini_file:
+  community.general.ini_file:
     dest: '{{ ansible_local.debops_fact.public_facts | d("/etc/ansible/debops_fact.ini") }}'
     section: 'version'
     option: 'ifupdown'
     value: '{{ ifupdown__role_metadata.version }}'
     mode: '0644'
-  when: ansible_local | d() and ansible_local.debops_fact | d() and
+  when: ansible_local is defined and ansible_local.debops_fact is defined and
         ansible_local.debops_fact.enabled | bool

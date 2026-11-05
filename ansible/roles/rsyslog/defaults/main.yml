@@ -40,7 +40,7 @@ rsyslog__deploy_state: 'present'
 # option requires additional configuration outside of the ``debops.rsyslog``
 # role. See :ref:`rsyslog__unprivileged` for more details.
 rsyslog__unprivileged: '{{ "True"
-                           if (ansible_distribution in [ "Ubuntu" ])
+                           if (ansible_distribution in ["Ubuntu"])
                            else "False" }}'
 
                                                                    # ]]]
@@ -120,9 +120,24 @@ rsyslog__append_groups: '{{ ["ssl-cert"] if (rsyslog__unprivileged | bool
 #
 # The home directory of the :envvar:`rsyslog__user` user, dependent on the OS
 # defaults. Takes effect only when the unprivileged mode is enabled.
-rsyslog__home: '{{ "/home/syslog"
-                   if (ansible_distribution in [ "Ubuntu" ])
-                   else "/var/log" }}'
+# On Ubuntu 24.04+, the ``syslog`` user is created by the package with
+# ``/nonexistent`` as the home directory (upstream change from ``/home/syslog``).
+rsyslog__home: '{{ "/nonexistent"
+                   if (ansible_distribution in ["Ubuntu"] and
+                       ansible_distribution_version is version("24.04", ">="))
+                   else ("/home/syslog"
+                         if (ansible_distribution in ["Ubuntu"])
+                         else "/var/log") }}'
+
+                                                                   # ]]]
+# .. envvar:: rsyslog__shell [[[
+#
+# The login shell of the :envvar:`rsyslog__user` user. Ubuntu creates the
+# ``syslog`` user with ``/usr/sbin/nologin`` on all versions; other systems
+# use ``/bin/false``. Both values prevent interactive login.
+rsyslog__shell: '{{ "/usr/sbin/nologin"
+                    if ansible_distribution in ["Ubuntu"]
+                    else "/bin/false" }}'
 
                                                                    # ]]]
 # .. envvar:: rsyslog__file_owner [[[
@@ -231,7 +246,7 @@ rsyslog__default_driver_mode: '{{ "1"
                                                                    # ]]]
 # .. envvar:: rsyslog__default_driver_authmode [[[
 #
-# Specify the default network driver authetication mode. Currently only
+# Specify the default network driver authentication mode. Currently only
 # `x509/name` or `anon` are available:
 rsyslog__default_driver_authmode: '{{ "x509/name"
                                       if rsyslog__default_netstream_driver == "gtls" and
@@ -509,7 +524,7 @@ rsyslog__default_configuration:
   # Don't load the kernel input module in Linux Containers
   - name: 'module_imklog'
     state: '{{ "comment"
-               if (ansible_virtualization_type in [ "lxc", "docker", "openvz" ])
+               if (ansible_virtualization_type in ["lxc", "docker", "openvz"])
                else "ignore" }}'
 
   - name: 'module_imudp'
@@ -547,7 +562,7 @@ rsyslog__default_configuration:
       $IncludeConfig /etc/rsyslog.d/*.template
     state: 'present'
     section: 'global'
-    copy_id_from: 'default_template'
+    anchor_to: 'default_template'
 
   - name: 'include_outputs'
     comment: 'Include *.output files in /etc/rsyslog.d/'
@@ -676,7 +691,7 @@ rsyslog__default_rules:
                                             + rsyslog__host_forward)) %}
           {{ element.selector | d("*.*") }} action(
                 type="omfwd"
-                target="{{ (element.target | d(element)) | regex_replace("\.$","") }}"
+                target="{{ (element.target | d(element)) | regex_replace("\.$", "") }}"
                 port="{{ element.port | d('6514') }}"
                 protocol="{{ element.protocol | d('tcp') }}"
                 queue.type="{{ element.queue_type | d('linkedList') }}"
@@ -686,11 +701,11 @@ rsyslog__default_rules:
                 streamDriverMode="{{ element.driver_mode | d(rsyslog__default_driver_mode) }}"
                 streamDriverAuthMode="{{ element.driver_authmode | d(rsyslog__default_driver_authmode) }}"
           {% if element.driver_authmode | d(rsyslog__default_driver_authmode) != "anon" %}
-          {%   if rsyslog__send_permitted_peers is string %}
+          {% if rsyslog__send_permitted_peers is string %}
                 streamDriverPermittedPeers="{{ rsyslog__send_permitted_peers }}"
-          {%   else %}
+          {% else %}
                 streamDriverPermittedPeers="{{ rsyslog__send_permitted_peers | first }}"
-          {%   endif %}
+          {% endif %}
           {% endif %}
               )
           {% endfor %}
@@ -799,11 +814,11 @@ rsyslog__default_rules:
             streamDriver.mode="1"
             streamDriver.authMode="{{ rsyslog__default_driver_authmode }}"
           {% if rsyslog__default_driver_authmode != "anon" %}
-          {%   if rsyslog__permitted_peers is string %}
+          {% if rsyslog__permitted_peers is string %}
             permittedPeer="{{ rsyslog__permitted_peers }}"
-          {%   else %}
+          {% else %}
             permittedPeer=["{{ rsyslog__permitted_peers | join('","') }}"]
-          {%   endif %}
+          {% endif %}
           {% endif %}
           )
         state: '{{ "present" if rsyslog__pki | bool else "absent" }}'
@@ -832,13 +847,13 @@ rsyslog__default_rules:
     divert: True
     divert_to: '65-ufw.conf'
     state: '{{ rsyslog__deploy_state
-               if (ansible_distribution in [ "Ubuntu" ])
+               if (ansible_distribution in ["Ubuntu"])
                else "ignore" }}'
 
   - name: '50-default.conf'
     divert: True
     state: '{{ "present"
-               if (ansible_distribution in [ "Ubuntu" ])
+               if (ansible_distribution in ["Ubuntu"])
                else "absent" }}'
 
   - name: 'remote.template'
@@ -1142,6 +1157,7 @@ rsyslog__logrotate__dependent_config:
         options: |
           rotate {{ rsyslog__rotation_count_system }}
           {{ rsyslog__rotation_period_system }}
+          maxsize 1G
           missingok
           notifempty
           delaycompress
@@ -1149,15 +1165,16 @@ rsyslog__logrotate__dependent_config:
         postrotate: |
           {{ "invoke-rc.d rsyslog rotate > /dev/null"
             if (ansible_distribution_release in
-                 ([ "stretch", "trusty" ]))
+                 (["stretch", "trusty"]))
             else "/usr/lib/rsyslog/rsyslog-rotate" }}
 
       - logs: '{{ (rsyslog__default_logfiles
                    + rsyslog__logfiles)
-                  | difference(["/var/log/syslog"]) }}'
+                  | difference(["/var/log/syslog"]) | sort }}'
         options: |
           rotate {{ rsyslog__rotation_count_system }}
           {{ rsyslog__rotation_period_system }}
+          maxsize 1G
           missingok
           notifempty
           compress
@@ -1166,7 +1183,7 @@ rsyslog__logrotate__dependent_config:
         postrotate: |
           {{ "invoke-rc.d rsyslog rotate > /dev/null"
             if (ansible_distribution_release in
-                 ([ "stretch", "trusty" ]))
+                 (["stretch", "trusty"]))
             else "/usr/lib/rsyslog/rsyslog-rotate" }}
     state: '{{ "present"
                 if (rsyslog__enabled | bool and rsyslog__deploy_state != "absent")
@@ -1177,6 +1194,7 @@ rsyslog__logrotate__dependent_config:
     options: |
       rotate {{ rsyslog__rotation_count_remote }}
       {{ rsyslog__rotation_period_remote }}
+      maxsize 1G
       missingok
       notifempty
       compress
@@ -1185,7 +1203,7 @@ rsyslog__logrotate__dependent_config:
     postrotate: |
       {{ "invoke-rc.d rsyslog rotate > /dev/null"
         if (ansible_distribution_release in
-             ([ "stretch", "trusty" ]))
+             (["stretch", "trusty"]))
         else "/usr/lib/rsyslog/rsyslog-rotate" }}
     state: '{{ "present"
                 if (rsyslog__enabled | bool and rsyslog__deploy_state != "absent" and

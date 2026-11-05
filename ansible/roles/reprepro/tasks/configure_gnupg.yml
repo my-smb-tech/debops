@@ -58,12 +58,13 @@
   args:
     chdir: '{{ reprepro__home }}'
   register: reprepro__register_keygen
+  changed_when: reprepro__register_keygen.changed | bool
   become: True
   become_user: '{{ reprepro__user }}'
   when: reprepro__register_private_keys.matched == 0
 
 - name: Archive ~/.gnupg directory
-  archive:
+  community.general.archive:
     path: '{{ reprepro__home + "/.gnupg" }}'
     dest: '{{ reprepro__home + "/" + reprepro__gpg_snapshot_name }}'
     owner: '{{ reprepro__user }}'

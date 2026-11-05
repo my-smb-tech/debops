@@ -56,7 +56,7 @@
     groups: '{{ rsyslog__append_groups | join(",") | default(omit) }}'
     append: True
     home: '{{ rsyslog__home }}'
-    shell: '/bin/false'
+    shell: '{{ rsyslog__shell }}'
     state: 'present'
     createhome: False
     system: True
@@ -88,7 +88,7 @@
   register: rsyslog__register_file_permissions
   when: rsyslog__enabled | bool and rsyslog__deploy_state != 'absent' and
         rsyslog__unprivileged | bool
-  changed_when: rsyslog__register_file_permissions.stdout | d()
+  changed_when: rsyslog__register_file_permissions.stdout is truthy
   notify: [ 'Check and restart rsyslogd' ]
 
 - name: Create systemd-tmpfiles override
@@ -102,7 +102,7 @@
         ansible_distribution == "Debian"
 
 - name: Divert main rsyslog configuration file
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '/etc/rsyslog.conf'
     state: 'present'
   notify: [ 'Check and restart rsyslogd' ]
@@ -118,16 +118,16 @@
   when: rsyslog__enabled | bool and rsyslog__deploy_state != 'absent'
 
 - name: Manage configuration file diversions
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '{{ "/etc/rsyslog.d/" + (item.divert_to | d(item.name)) }}'
     state: '{{ "present"
-               if (item.state | d("present") not in [ "absent", "ignore", "init" ])
+               if (item.state | d("present") not in ["absent", "ignore", "init"])
                else "absent" }}'
   loop: '{{ rsyslog__combined_rules | flatten | debops.debops.parse_kv_items
             | selectattr("divert", "defined") | list
             | selectattr("divert", "equalto", True) | list }}'
   loop_control:
-    label: '{{ {"name": item.name, "state": (item.state | d("present")) } }}'
+    label: '{{ {"name": item.name, "state": (item.state | d("present"))} }}'
   notify: [ 'Check and restart rsyslogd' ]
   when: rsyslog__enabled | bool and rsyslog__deploy_state != 'absent'
 
@@ -137,13 +137,13 @@
     dest: '{{ "/etc/rsyslog.d/" + item.name }}'
     owner: '{{ item.owner | d("root") }}'
     group: '{{ item.group | d("root") }}'
-    mode:  '{{ item.mode  | d("0644") }}'
+    mode:  '{{ item.mode | d("0644") }}'
   loop: '{{ rsyslog__combined_rules | flatten | debops.debops.parse_kv_items }}'
   loop_control:
-    label: '{{ {"name": item.name, "state": (item.state | d("present")) } }}'
+    label: '{{ {"name": item.name, "state": (item.state | d("present"))} }}'
   when: (rsyslog__enabled | bool and rsyslog__deploy_state != 'absent' and
-         item.state | d('present') not in [ 'absent', 'ignore', 'init' ] and
-         (item.options | d() or item.raw | d()))
+         item.state | d('present') not in ['absent', 'ignore', 'init'] and
+         (item.options is defined or item.raw is defined))
   notify: [ 'Check and restart rsyslogd' ]
 
 - name: Remove custom config files when requested
@@ -152,7 +152,7 @@
     state: 'absent'
   loop: '{{ rsyslog__combined_rules | flatten | debops.debops.parse_kv_items }}'
   loop_control:
-    label: '{{ {"name": item.name, "state": (item.state | d("present")) } }}'
+    label: '{{ {"name": item.name, "state": (item.state | d("present"))} }}'
   when: (rsyslog__enabled | bool and rsyslog__deploy_state != 'absent' and
          (item.divert is undefined or not item.divert | bool) and
          item.state | d('present') == 'absent')

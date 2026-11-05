@@ -42,7 +42,7 @@
   ansible.builtin.meta: 'flush_handlers'
 
 - name: Divert the original Metricbeat configuration
-  dpkg_divert:
+  debops.debops.dpkg_divert:
     path: '/etc/metricbeat/metricbeat.yml'
     state: 'present'
   register: metricbeat__register_config_divert
@@ -64,42 +64,42 @@
   loop: '{{ metricbeat__combined_snippets | debops.debops.parse_kv_config }}'
   loop_control:
     label:  '{{ {"name": item.name, "state": item.state} }}'
-  when: item.state | d('present') not in [ 'absent', 'ignore', 'init' ] and item.config | d()
+  when: item.state | d('present') not in ['absent', 'ignore', 'init'] and item.config is defined and item.config is truthy
   no_log: '{{ debops__no_log | d(True) }}'
 
 - name: Manage snippet diversion and reversion
-  dpkg_divert:
-    path: '{{ "/etc/metricbeat/" + (item.name | regex_replace(".yml","") + ".yml") }}'
+  debops.debops.dpkg_divert:
+    path: '{{ "/etc/metricbeat/" + (item.name | regex_replace(".yml", "") + ".yml") }}'
     state: '{{ "absent" if item.state | d("present") == "absent" else "present" }}'
     delete: True
   loop: '{{ metricbeat__combined_snippets | debops.debops.parse_kv_config }}'
   loop_control:
     label:  '{{ {"name": item.name, "state": item.state} }}'
   notify: [ 'Test metricbeat configuration and restart' ]
-  when: ansible_pkg_mgr == 'apt' and item.config | d() and (item.divert | d())
+  when: ansible_pkg_mgr == 'apt' and item.config is defined and item.config is truthy and (item.divert is defined and item.divert is truthy)
   no_log: '{{ debops__no_log | d(True) }}'
 
 - name: Remove snippet configuration if requested
   ansible.builtin.file:
-    path: '{{ "/etc/metricbeat/" + (item.name | regex_replace(".yml","") + ".yml") }}'
+    path: '{{ "/etc/metricbeat/" + (item.name | regex_replace(".yml", "") + ".yml") }}'
     state: 'absent'
   loop: '{{ metricbeat__combined_snippets | debops.debops.parse_kv_config }}'
   loop_control:
     label:  '{{ {"name": item.name, "state": item.state, "config": item.config} }}'
   notify: [ 'Test metricbeat configuration and restart' ]
-  when: item.state | d('present') == 'absent' and item.config | d()
+  when: item.state | d('present') == 'absent' and item.config is defined and item.config is truthy
   no_log: '{{ debops__no_log | d(True) }}'
 
 - name: Generate snippet configuration
   ansible.builtin.template:
     src: 'etc/metricbeat/snippets.d/snippet.yml.j2'
-    dest: '{{ "/etc/metricbeat/" + (item.name | regex_replace(".yml","") + ".yml") }}'
+    dest: '{{ "/etc/metricbeat/" + (item.name | regex_replace(".yml", "") + ".yml") }}'
     mode: '{{ item.mode | d("0600") }}'
   loop: '{{ metricbeat__combined_snippets | debops.debops.parse_kv_config }}'
   loop_control:
     label:  '{{ {"name": item.name, "state": item.state, "config": item.config} }}'
   notify: [ 'Test metricbeat configuration and restart' ]
-  when: item.state | d('present') not in [ 'absent', 'ignore', 'init' ] and item.config | d()
+  when: item.state | d('present') not in ['absent', 'ignore', 'init'] and item.config is defined and item.config is truthy
   no_log: '{{ debops__no_log | d(True) }}'
 
 # The keystore handling is very similar to ../../kibana/tasks/main.yml
@@ -111,6 +111,8 @@
 
 - name: Create Metricbeat keystore if not present
   ansible.builtin.command: 'metricbeat keystore create'
+  register: metricbeat__register_keystore_create
+  changed_when: metricbeat__register_keystore_create.changed | bool
   when: not metricbeat__register_keystore.stat.exists
 
 - name: Get the list of keystore contents
@@ -125,6 +127,8 @@
   loop_control:
     label:  '{{ {"name": item.name, "state": item.state} }}'
   notify: [ 'Test metricbeat configuration and restart' ]
+  register: metricbeat__register_keystore_remove
+  changed_when: metricbeat__register_keystore_remove.changed | bool
   when: (item.state | d('present') == 'absent' and
          item.name in metricbeat__register_keys.stdout_lines)
   no_log: '{{ debops__no_log | d(True) }}'
@@ -145,7 +149,9 @@
   loop_control:
     label:  '{{ {"name": item.name, "state": item.state} }}'
   notify: [ 'Test metricbeat configuration and restart' ]
-  when: (item.state | d('present') not in [ 'absent', 'ignore', 'init' ] and
+  register: metricbeat__register_keystore_add
+  changed_when: metricbeat__register_keystore_add.changed | bool
+  when: (item.state | d('present') not in ['absent', 'ignore', 'init'] and
          (item.name not in metricbeat__register_keys.stdout_lines or
           (item.force | d(False)) | bool))
   no_log: '{{ debops__no_log | d(True) }}'
@@ -154,4 +160,4 @@
   ansible.builtin.service:  # noqa no-handler
     name: 'metricbeat'
     enabled: True
-  when: ansible_local.metricbeat.installed | d() and metricbeat__register_config_divert is changed
+  when: ansible_local.metricbeat.installed is defined and ansible_local.metricbeat.installed is truthy and metricbeat__register_config_divert is changed

@@ -27,36 +27,34 @@
     state: 'absent'
     purge: True
   when: (nullmailer__deploy_state | d('present') != 'absent' and
-         nullmailer__purge_mta_packages)
+         nullmailer__purge_mta_packages is truthy)
 
 - name: Generate configuration files
   ansible.builtin.copy:
     dest:    '{{ item.dest }}'
     content: "{{ (item.content + '\n') if item.content | d() else ('' if item.content is defined else omit) }}"
-    src:     '{{ item.src   | d(omit) }}'
+    src:     '{{ item.src | d(omit) }}'
     owner:   '{{ item.owner | d(omit) }}'
     group:   '{{ item.group | d(omit) }}'
-    mode:    '{{ item.mode  | d(omit) }}'
-  with_flattened:
-    - '{{ nullmailer__configuration_files }}'
+    mode:    '{{ item.mode | d(omit) }}'
+  loop: '{{ q("flattened", nullmailer__configuration_files) }}'
   notify: [ 'Restart nullmailer' ]
   when: (nullmailer__deploy_state | d('present') != 'absent' and
-         (item.dest | d() and (item.src | d() or item.content is defined) and
+         (item.dest is defined and (item.src is defined or item.content is defined) and
           item.state | d('present') != 'absent'))
 
 - name: Generate private configuration files
   ansible.builtin.copy:
     dest:    '{{ item.dest }}'
     content: "{{ (item.content + '\n') if item.content | d() else omit }}"
-    src:     '{{ item.src   | d(omit) }}'
+    src:     '{{ item.src | d(omit) }}'
     owner:   '{{ item.owner | d(omit) }}'
     group:   '{{ item.group | d(omit) }}'
-    mode:    '{{ item.mode  | d(omit) }}'
-  with_flattened:
-    - '{{ nullmailer__private_configuration_files }}'
+    mode:    '{{ item.mode | d(omit) }}'
+  loop: '{{ q("flattened", nullmailer__private_configuration_files) }}'
   notify: [ 'Restart nullmailer' ]
   when: (nullmailer__deploy_state | d('present') != 'absent' and
-         (item.dest | d() and (item.src | d() or item.content | d()) and
+         (item.dest is defined and (item.src is defined or item.content is defined) and
           item.state | d('present') != 'absent'))
   no_log: '{{ debops__no_log | d(True) }}'
 
@@ -64,22 +62,20 @@
   ansible.builtin.file:
     path: '{{ item.dest }}'
     state: 'absent'
-  with_flattened:
-    - '{{ nullmailer__configuration_files }}'
+  loop: '{{ q("flattened", nullmailer__configuration_files) }}'
   notify: [ 'Restart nullmailer' ]
   when: (nullmailer__deploy_state | d('present') != 'absent' and
-         (item.dest | d() and (item.src | d() or item.content is defined) and
+         (item.dest is defined and (item.src is defined or item.content is defined) and
           item.state | d('present') == 'absent'))
 
 - name: Remove private configuration files if requested
   ansible.builtin.file:
     path: '{{ item.dest }}'
     state: 'absent'
-  with_flattened:
-    - '{{ nullmailer__private_configuration_files }}'
+  loop: '{{ q("flattened", nullmailer__private_configuration_files) }}'
   notify: [ 'Restart nullmailer' ]
   when: (nullmailer__deploy_state | d('present') != 'absent' and
-         (item.dest | d() and (item.src | d() or item.content is defined) and
+         (item.dest is defined and (item.src is defined or item.content is defined) and
           item.state | d('present') == 'absent'))
   no_log: '{{ debops__no_log | d(True) }}'
 
@@ -104,7 +100,7 @@
     - 'nullmailer-smtpd'
     - 'nullmailer-smtpd6'
   notify: [ 'Reload xinetd' ]
-  when: ((nullmailer__deploy_state | d() and nullmailer__deploy_state == 'absent') or
+  when: ((nullmailer__deploy_state is defined and nullmailer__deploy_state == 'absent') or
          not nullmailer__smtpd | bool)
 
 - name: Remove old dpkg cleanup hook and script

@@ -23,8 +23,8 @@
 #
 # List of default packages to install for PowerDNS Authoritative Server
 # support.
-pdns__base_packages: '{{ [ "pdns-server" ]
-                         + ([ "pdns-backend-pgsql" ]
+pdns__base_packages: '{{ ["pdns-server"]
+                         + (["pdns-backend-pgsql"]
                             if "gpgsql" in pdns__backends
                             else []) }}'
 
@@ -46,8 +46,13 @@ pdns__allow: [ '0.0.0.0/0', '::/0' ]
                                                                    # ]]]
 # .. envvar:: pdns__local_address [[[
 #
-# Local IPv4 and IPv6 addresses to bind to.
-pdns__local_address: [ '0.0.0.0', '::' ]
+# Local IPv4 and IPv6 addresses to bind to. By default bind only to external IP
+# addresses to avoid conflict with the :command:`systemd-resolved` service
+# listening on 127.0.0.53:53.
+pdns__local_address: '{{ (ansible_all_ipv4_addresses
+                          + ansible_all_ipv6_addresses)
+                         | difference(ansible_all_ipv6_addresses | d([])
+                                      | ansible.utils.ipaddr("link-local")) }}'
 
                                                                    # ]]]
 # .. envvar:: pdns__local_port [[[
@@ -271,12 +276,22 @@ pdns__original_configuration:
     value: ''
 
   - name: 'setgid'
-    comment: 'Run as an unprivileged group instead of root.'
+    comment: |-
+      Run as an unprivileged group instead of root. Explicitly configuring this
+      is no longer necessary since pdns 4.3.0.
     value: 'pdns'
+    state: '{{ "present"
+               if ansible_local.pdns.version is version("4.3.0", "<")
+               else "absent" }}'
 
   - name: 'setuid'
-    comment: 'Run as an unprivileged user instead of root.'
+    comment: |-
+      Run as an unprivileged user instead of root. Explicitly configuring this
+      is no longer necessary since pdns 4.3.0.
     value: 'pdns'
+    state: '{{ "present"
+               if ansible_local.pdns.version is version("4.3.0", "<")
+               else "absent" }}'
 
                                                                    # ]]]
 # .. envvar:: pdns__default_configuration [[[
@@ -288,15 +303,14 @@ pdns__default_configuration:
     comment: |-
       Local IP addresses to which we bind. Accepts IPv6 addresses since pdns
       4.3.0.
-    value: '{{ (pdns__local_address
-                if ansible_local.pdns.version is version("4.3.0", ">=")
-                else (pdns__local_address | ipv4)) | join (",") }}'
+    value: '{{ (pdns__local_address if ansible_local.pdns.version is version("4.3.0", ">=")
+                else (pdns__local_address | ansible.utils.ipv4)) | join(",") }}'
 
   - name: 'local-ipv6'
     comment: |-
       Local IPv6 addresses to which we bind. Will be deprecated in pdns 4.3.0
       and removed in pdns 4.5.0.
-    value: '{{ pdns__local_address | ipv6 | join(",") }}'
+    value: '{{ pdns__local_address | ansible.utils.ipv6 | join(",") }}'
     state: '{{ "present"
                if ansible_local.pdns.version is version("4.3.0", "<")
                else "absent" }}'

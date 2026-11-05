@@ -166,6 +166,21 @@ stages:
     JANE_DIFF_PATTERN: '.*/roles/apt_mark/.*'
     JANE_LOG_PATTERN: '\[apt_mark\]'
 
+'apt_mirror role':
+  <<: *test_role_2nd_deps
+  needs:
+    - 'keyring role'
+    - 'apt_preferences role'
+    - 'ferm role'
+    - 'python role'
+    - 'nginx role'
+  variables:
+    JANE_TEST_FACT: 'apt_mirror.fact'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/apt_mirror.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_apt_mirror'
+    JANE_DIFF_PATTERN: '.*/roles/apt_mirror/.*'
+    JANE_LOG_PATTERN: '\[apt_mirror\]'
+
 'apt_preferences role':
   <<: *test_role_no_deps
   variables:
@@ -239,6 +254,25 @@ stages:
     JANE_INVENTORY_GROUPS: 'debops_service_backup2l'
     JANE_DIFF_PATTERN: '.*/roles/backup2l/.*'
     JANE_LOG_PATTERN: '\[backup2l\]'
+
+'bind role':
+  <<: *test_role_2nd_deps
+  needs:
+    - 'apt_preferences role'
+    - 'ferm role'
+    - 'resolvconf role'
+    - 'cron role'
+    - 'logrotate role'
+    - 'keyring role'
+    - 'etc_services role'
+    - 'python role'
+    - 'nginx role'
+  variables:
+    JANE_TEST_FACT: 'bind.fact'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/bind.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_bind'
+    JANE_DIFF_PATTERN: '.*/roles/bind/.*'
+    JANE_LOG_PATTERN: '\[bind\]'
 
 # At the moment BoxBackup role is broken, needs to be updated.
 #'boxbackup role':
@@ -388,14 +422,12 @@ stages:
 
 # --- d --- [[[2
 
-# The 'debops_api' role is currently broken, needs to be updated.
-#'debops_api role':
-#  <<: *test_role_2nd_deps
-#  variables:
-#    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/debops_api.yml'
-#    JANE_INVENTORY_GROUPS: 'debops_service_debops_api'
-#    JANE_DIFF_PATTERN: '.*/roles/debops_api/.*'
-#    JANE_LOG_PATTERN: '\[debops_api\]'
+'debconf role':
+  <<: *test_role_no_deps
+  variables:
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/debconf.yml'
+    JANE_DIFF_PATTERN: '.*/roles/debconf/.*'
+    JANE_LOG_PATTERN: '\[debconf\]'
 
 'debops_fact role':
   <<: *test_role_no_deps
@@ -531,6 +563,25 @@ stages:
     JANE_INVENTORY_GROUPS: 'debops_service_docker_server'
     JANE_DIFF_PATTERN: '.*/roles/docker_server/.*'
     JANE_LOG_PATTERN: '\[docker_server\]'
+  tags: [ 'shell', 'vagrant-vm' ]
+
+'docker_service role':
+  <<: *test_role_2nd_deps
+  needs:
+    - 'resolvconf role'
+    - 'keyring role'
+    - 'apt_preferences role'
+    - 'ferm role'
+    - 'python role'
+    - 'postgresql role'
+    - 'nginx role'
+    - 'docker_server role'
+  variables:
+    JANE_TEST_FACT: 'docker_service.fact'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/docker_service.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_docker_service'
+    JANE_DIFF_PATTERN: '.*/roles/docker_service/.*'
+    JANE_LOG_PATTERN: '\[docker_service\]'
   tags: [ 'shell', 'vagrant-vm' ]
 
 'dokuwiki role':
@@ -798,27 +849,18 @@ stages:
 # --- g --- [[[2
 
 'gitlab role':
-  <<: *test_role_4th_deps
+  <<: *test_role_3rd_deps
   needs:
     - 'keyring role'
-    - 'system_groups role'
-    - 'apt_preferences role'
-    - 'python role'
-    - 'golang role'
-    - 'nodejs role'
+    - 'extrepo role'
     - 'etc_services role'
-    - 'logrotate role'
     - 'ferm role'
-    - 'ruby role'
-    - 'postgresql_server role'
-    - 'postgresql role'
+    - 'python role'
     - 'ldap role'
-    - 'nginx role'
   variables:
     JANE_TEST_FACT: 'gitlab.fact'
-    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/apt.yml ${DEBOPS_PLAYBOOKS}/service/redis_server.yml ${DEBOPS_PLAYBOOKS}/service/postgresql_server.yml ${DEBOPS_PLAYBOOKS}/service/gitlab.yml'
-    JANE_INVENTORY_GROUPS: 'debops_service_postgresql_server,debops_service_redis_server,debops_service_gitlab'
-    JANE_INVENTORY_HOSTVARS: 'postgresql_server__delegate_to=localhost postgresql__delegate_to=localhost'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/pki.yml ${DEBOPS_PLAYBOOKS}/service/gitlab.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_gitlab'
     JANE_DIFF_PATTERN: '.*/roles/gitlab/.*'
     JANE_LOG_PATTERN: '\[gitlab\]'
     VAGRANT_MASTER_MEMORY: '6144'
@@ -1100,6 +1142,23 @@ stages:
     JANE_INVENTORY_GROUPS: 'debops_service_influxdb'
     JANE_DIFF_PATTERN: '.*/roles/influxdb/.*'
     JANE_LOG_PATTERN: '\[influxdb\]'
+
+'influxdb2 role':
+  <<: *test_role_2nd_deps
+  needs:
+    - 'keyring role'
+    - 'apt_preferences role'
+    - 'etc_services role'
+    - 'ferm role'
+    - 'python role'
+    - 'nginx role'
+    - 'influxdata role'
+  variables:
+    JANE_TEST_FACT: 'influxdb2.fact'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/influxdb2.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_influxdb2'
+    JANE_DIFF_PATTERN: '.*/roles/influxdb2/.*'
+    JANE_LOG_PATTERN: '\[influxdb2\]'
 
 'ipxe role':
   <<: *test_role_no_deps
@@ -1483,6 +1542,27 @@ stages:
     JANE_DIFF_PATTERN: '.*/roles/minidlna/.*'
     JANE_LOG_PATTERN: '\[minidlna\]'
 
+'miniflux role':
+  <<: *test_role_2nd_deps
+  needs:
+    - 'keyring role'
+    - 'secret role'
+    - 'apt_preferences role'
+    - 'etc_services role'
+    - 'golang role'
+    - 'ferm role'
+    - 'postgresql_server role'
+    - 'postgresql role'
+    - 'python role'
+    - 'nginx role'
+  variables:
+    JANE_TEST_FACT: 'miniflux.fact'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/postgresql_server.yml ${DEBOPS_PLAYBOOKS}/service/miniflux.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_postgresql_server,debops_service_miniflux'
+    JANE_INVENTORY_HOSTVARS: 'postgresql_server__delegate_to=localhost postgresql__delegate_to=localhost'
+    JANE_DIFF_PATTERN: '.*/roles/miniflux/.*'
+    JANE_LOG_PATTERN: '\[miniflux\]'
+
 'minio role':
   <<: *test_role_2nd_deps
   needs:
@@ -1590,6 +1670,15 @@ stages:
     JANE_DIFF_PATTERN: '.*/roles/netbase/.*'
     JANE_LOG_PATTERN: '\[netbase\]'
 
+'netboot_assistant role':
+  <<: *test_role_no_deps
+  variables:
+    JANE_TEST_FACT: 'netboot_assistant.fact'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/netboot_assistant.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_netboot_assistant'
+    JANE_DIFF_PATTERN: '.*/roles/netboot_assistant/.*'
+    JANE_LOG_PATTERN: '\[netboot_assistant\]'
+
 'netbox role':
   <<: *test_role_3rd_deps
   needs:
@@ -1615,6 +1704,15 @@ stages:
     JANE_INVENTORY_HOSTVARS: 'postgresql_server__delegate_to=localhost postgresql__delegate_to=localhost'
     JANE_DIFF_PATTERN: '.*/roles/netbox/.*'
     JANE_LOG_PATTERN: '\[netbox\]'
+
+'networkd role':
+  <<: *test_role_no_deps
+  variables:
+    JANE_TEST_FACT: 'networkd.fact'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/networkd.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_networkd'
+    JANE_DIFF_PATTERN: '.*/roles/networkd/.*'
+    JANE_LOG_PATTERN: '\[networkd\]'
 
 'neurodebian role':
   <<: *test_role_1st_deps
@@ -1679,6 +1777,9 @@ stages:
     JANE_INVENTORY_HOSTVARS: 'nginx_flavor=passenger'
     JANE_DIFF_PATTERN: '.*/roles/nginx/.*'
     JANE_LOG_PATTERN: '\[nginx\]'
+
+# `nixos role` is not testable on a Debian VM, so it is not currently tested in
+# the CI pipeline.
 
 'nodejs role':
   <<: *test_role_1st_deps
@@ -1761,6 +1862,20 @@ stages:
     JANE_DIFF_PATTERN: '.*/roles/opendkim/.*'
     JANE_LOG_PATTERN: '\[opendkim\]'
 
+'opensearch role':
+  <<: *test_role_1st_deps
+  needs:
+    - 'keyring role'
+    - 'sysctl role'
+    - 'etc_services role'
+    - 'ferm role'
+  variables:
+    JANE_TEST_FACT: 'opensearch.fact'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/opensearch.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_opensearch'
+    JANE_DIFF_PATTERN: '.*/roles/opensearch/.*'
+    JANE_LOG_PATTERN: '\[opensearch\]'
+
 'owncloud/apache role':
   <<: *test_role_3rd_deps
   needs:
@@ -1834,6 +1949,21 @@ stages:
     JANE_INVENTORY_GROUPS: 'debops_service_persistent_paths'
     JANE_DIFF_PATTERN: '.*/roles/persistent_paths/.*'
     JANE_LOG_PATTERN: '\[persistent_paths\]'
+
+'pgbadger role':
+  <<: *test_role_3rd_deps
+  needs:
+    - 'keyring role'
+    - 'apt_preferences role'
+    - 'ferm role'
+    - 'python role'
+    - 'nginx role'
+  variables:
+    JANE_TEST_FACT: 'pgbadger.fact'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/pgbadger.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_pgbadger'
+    JANE_DIFF_PATTERN: '.*/roles/pgbadger/.*'
+    JANE_LOG_PATTERN: '\[pgbadger\]'
 
 'php role':
   <<: *test_role_1st_deps
@@ -2054,7 +2184,7 @@ stages:
 'python/raw role':
   <<: *test_role_no_deps
   variables:
-    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/python_raw.yml'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/scope/python/raw.yml'
     JANE_INVENTORY_GROUPS: 'debops_service_python'
     JANE_DIFF_PATTERN: '.*/roles/python/.*'
     JANE_LOG_PATTERN: '\[python\]'
@@ -2178,6 +2308,15 @@ stages:
     JANE_INVENTORY_GROUPS: 'debops_service_resolvconf'
     JANE_DIFF_PATTERN: '.*/roles/resolvconf/.*'
     JANE_LOG_PATTERN: '\[resolvconf\]'
+
+'resolved role':
+  <<: *test_role_no_deps
+  variables:
+    JANE_TEST_FACT: 'resolved.fact'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/resolved.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_resolved'
+    JANE_DIFF_PATTERN: '.*/roles/resolved/.*'
+    JANE_LOG_PATTERN: '\[resolved\]'
 
 'resources role':
   <<: *test_role_no_deps
@@ -2549,6 +2688,15 @@ stages:
     JANE_DIFF_PATTERN: '.*/roles/system_users/.*'
     JANE_LOG_PATTERN: '\[system_users\]'
 
+'systemd role':
+  <<: *test_role_no_deps
+  variables:
+    JANE_TEST_FACT: 'systemd.fact'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/systemd.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_systemd'
+    JANE_DIFF_PATTERN: '.*/roles/systemd/.*'
+    JANE_LOG_PATTERN: '\[systemd\]'
+
 
 # --- t --- [[[2
 
@@ -2595,6 +2743,15 @@ stages:
     JANE_INVENTORY_GROUPS: 'debops_service_tgt'
     JANE_DIFF_PATTERN: '.*/roles/tgt/.*'
     JANE_LOG_PATTERN: '\[tgt\]'
+
+'timesyncd role':
+  <<: *test_role_no_deps
+  variables:
+    JANE_TEST_FACT: 'timesyncd.fact'
+    JANE_TEST_PLAY: '${DEBOPS_PLAYBOOKS}/service/timesyncd.yml'
+    JANE_INVENTORY_GROUPS: 'debops_service_timesyncd'
+    JANE_DIFF_PATTERN: '.*/roles/timesyncd/.*'
+    JANE_LOG_PATTERN: '\[timesyncd\]'
 
 'tinc/gateway role':
   <<: *test_role_3rd_deps
